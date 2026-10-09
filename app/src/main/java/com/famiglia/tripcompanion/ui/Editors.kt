@@ -149,12 +149,12 @@ fun ReservationEditor(existing: Reservation?, trip: Trip, model: TravelViewModel
 
 @Composable
 fun PlaceEditor(existing: Place?, defaultTripId: Long?, trips: List<Trip>, model: TravelViewModel,
-    suggestedGoogleId: String? = null, suggestedName: String = "", onDismiss: () -> Unit) {
+    suggestedGoogleId: String? = null, suggestedName: String = "", suggestedAddress: String = "", onDismiss: () -> Unit) {
     var name by rememberSaveable { mutableStateOf(existing?.name ?: suggestedName) }
     var googleId by rememberSaveable { mutableStateOf(existing?.googlePlaceId ?: suggestedGoogleId) }
     var category by rememberSaveable { mutableStateOf(existing?.category ?: PlaceCategory.ATTRACTION.name) }
     var tripId by rememberSaveable { mutableStateOf(existing?.tripId ?: defaultTripId) }
-    var address by rememberSaveable { mutableStateOf(existing?.address ?: "") }
+    var address by rememberSaveable { mutableStateOf(existing?.address ?: suggestedAddress) }
     var notes by rememberSaveable { mutableStateOf(existing?.notes ?: "") }
     val options = listOf("All trips / unassigned") + trips.map { "${it.destination} · ${it.startDate} (#${it.id})" }
     Editor(if (existing == null) "Save a place" else "Edit saved place", onDismiss, {
