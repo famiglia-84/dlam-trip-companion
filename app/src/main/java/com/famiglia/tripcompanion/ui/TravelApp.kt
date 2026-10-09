@@ -31,23 +31,26 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import coil.compose.AsyncImage
 import com.famiglia.tripcompanion.data.*
+import com.famiglia.tripcompanion.maps.MapViewModel
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-private val Sections = listOf("Reservations", "Day plans", "Saved places")
+private val Sections = listOf("Reservations", "Day plans", "Saved places", "Map")
 private val DateFormat: DateTimeFormatter get() = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.getDefault())
 private fun readableDate(date: String): String = runCatching { LocalDate.parse(date).format(DateFormat) }.getOrDefault(date)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TravelApp(model: TravelViewModel) {
+    val maps: MapViewModel = viewModel()
     val data by model.data.collectAsStateWithLifecycle()
     val selected by model.selectedTrip.collectAsStateWithLifecycle()
     val section by model.section.collectAsStateWithLifecycle()
@@ -61,7 +64,15 @@ fun TravelApp(model: TravelViewModel) {
     var parentId by rememberSaveable { mutableLongStateOf(0L) }
     var deletion by rememberSaveable { mutableStateOf("") }
     var deletionId by rememberSaveable { mutableLongStateOf(0L) }
-    fun edit(kind: String, id: Long = 0, parent: Long = 0) { editor = kind; editId = id; parentId = parent }
+    var mapPlaceId by rememberSaveable { mutableStateOf<String?>(null) }
+    var mapPlaceLabel by rememberSaveable { mutableStateOf("") }
+    fun edit(kind: String, id: Long = 0, parent: Long = 0) {
+        editor = kind; editId = id; parentId = parent; mapPlaceId = null; mapPlaceLabel = ""
+    }
+    fun saveMapPlace(id: String, label: String) {
+        edit("place", parent = if (route == "trips") selected ?: 0 else 0)
+        mapPlaceId = id; mapPlaceLabel = label
+    }
     fun remove(kind: String, id: Long) { deletion = kind; deletionId = id }
 
     LaunchedEffect(model) { model.messages.collect { snacks.showSnackbar(it) } }
@@ -83,6 +94,8 @@ fun TravelApp(model: TravelViewModel) {
                             icon = { Icon(Icons.Default.Luggage, null) }, label = { Text("My trips") })
                         NavigationBarItem(selected = route == "places", onClick = { navigator.navigate("places") { launchSingleTop = true } },
                             icon = { Icon(Icons.Default.Bookmarks, null) }, label = { Text("Saved places") })
+                        NavigationBarItem(selected = route == "maps", onClick = { navigator.navigate("maps") { launchSingleTop = true } },
+                            icon = { Icon(Icons.Default.Map, null) }, label = { Text("Map") })
                     }
                 },
                 snackbarHost = { SnackbarHost(snacks) },
@@ -95,6 +108,8 @@ fun TravelApp(model: TravelViewModel) {
                         Spacer(Modifier.height(12.dp))
                         NavigationRailItem(selected = route == "places", onClick = { navigator.navigate("places") { launchSingleTop = true } },
                             icon = { Icon(Icons.Default.Bookmarks, null) }, label = { Text("Places") })
+                        NavigationRailItem(selected = route == "maps", onClick = { navigator.navigate("maps") { launchSingleTop = true } },
+                            icon = { Icon(Icons.Default.Map, null) }, label = { Text("Map") })
                     }
                     NavHost(navigator, startDestination = "trips", modifier = Modifier.weight(1f)) {
                         composable("trips") {
@@ -104,18 +119,19 @@ fun TravelApp(model: TravelViewModel) {
                                     TripsPane(data.trips, selected, { model.selectTrip(it); model.selectSection("Reservations") }, { edit("trip") }, Modifier.width(340.dp), true)
                                     VerticalDivider()
                                     if (trip == null) EmptyState("Where will you go next?", "Choose a trip to see your bookings, day plans and favourite places side by side.", Icons.Default.Explore, Modifier.weight(1f))
-                                    else TripDetails(trip, data, section, model::selectSection, { model.selectTrip(null) }, ::edit, ::remove, { item, delta -> model.perform { model.move(item, delta) } }, Modifier.weight(1f))
+                                    else TripDetails(trip, data, section, model::selectSection, { model.selectTrip(null) }, ::edit, ::remove, { item, delta -> model.perform { model.move(item, delta) } }, Modifier.weight(1f), maps, ::saveMapPlace)
                                 }
                             } else {
                                 Box(Modifier.fillMaxSize().testTag("compact-layout")) {
                                     if (trip == null) TripsPane(data.trips, selected, { model.selectTrip(it); model.selectSection("Reservations") }, { edit("trip") }, Modifier.fillMaxSize())
-                                    else TripDetails(trip, data, section, model::selectSection, { model.selectTrip(null) }, ::edit, ::remove, { item, delta -> model.perform { model.move(item, delta) } }, Modifier.fillMaxSize())
+                                    else TripDetails(trip, data, section, model::selectSection, { model.selectTrip(null) }, ::edit, ::remove, { item, delta -> model.perform { model.move(item, delta) } }, Modifier.fillMaxSize(), maps, ::saveMapPlace)
                                 }
                             }
                         }
                         composable("places") {
                             PlacesPane(data.places, data.trips, { edit("place") }, { edit("place", it.id) }, { remove("place", it.id) })
                         }
+                        composable("maps") { MapPane(maps, data.places, null, ::saveMapPlace) }
                     }
                 }
             }
@@ -123,7 +139,7 @@ fun TravelApp(model: TravelViewModel) {
             when (editor) {
                 "trip" -> TripEditor(data.trips.firstOrNull { it.id == editId }, model, { id -> model.selectTrip(id) }, { editor = "" })
                 "reservation" -> data.trips.firstOrNull { it.id == parentId }?.let { trip -> ReservationEditor(data.reservations.firstOrNull { it.id == editId }, trip, model) { editor = "" } }
-                "place" -> PlaceEditor(data.places.firstOrNull { it.id == editId }, parentId.takeIf { it != 0L }, data.trips, model) { editor = "" }
+                "place" -> PlaceEditor(data.places.firstOrNull { it.id == editId }, parentId.takeIf { it != 0L }, data.trips, model, mapPlaceId, mapPlaceLabel) { editor = "" }
                 "day" -> data.trips.firstOrNull { it.id == parentId }?.let { trip -> DayEditor(data.plans.firstOrNull { it.id == editId }, trip, model) { editor = "" } }
                 "activity" -> data.plans.firstOrNull { it.id == parentId }?.let { plan ->
                     ActivityEditor(data.activities.firstOrNull { it.id == editId }, plan, data.places.filter { it.tripId == null || it.tripId == plan.tripId }, model) { editor = "" }
@@ -212,7 +228,8 @@ private fun DestinationPhoto(trip: Trip, modifier: Modifier) {
 
 @Composable
 private fun TripDetails(trip: Trip, data: TravelData, section: String, sectionChange: (String) -> Unit, back: () -> Unit,
-    edit: (String, Long, Long) -> Unit, remove: (String, Long) -> Unit, move: (PlanActivity, Int) -> Unit, modifier: Modifier) {
+    edit: (String, Long, Long) -> Unit, remove: (String, Long) -> Unit, move: (PlanActivity, Int) -> Unit, modifier: Modifier,
+    maps: MapViewModel, saveMapPlace: (String, String) -> Unit) {
     Column(modifier) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = back) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back to my trips") }
@@ -221,6 +238,10 @@ private fun TripDetails(trip: Trip, data: TravelData, section: String, sectionCh
         }
         ScrollableTabRow(selectedTabIndex = Sections.indexOf(section).coerceAtLeast(0), edgePadding = 12.dp) {
             Sections.forEach { value -> Tab(selected = section == value, onClick = { sectionChange(value) }, text = { Text(value) }) }
+        }
+        if (section == "Map") {
+            MapPane(maps, data.places.filter { it.tripId == trip.id }, trip.id, saveMapPlace, Modifier.weight(1f))
+            return@Column
         }
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             item(key = "overview") {
@@ -320,6 +341,7 @@ private fun PlaceCard(place: Place, tripLabel: String?, edit: () -> Unit, remove
     InfoCard(place.name, PlaceCategory.valueOf(place.category).label + (tripLabel?.let { " · $it" } ?: ""), Icons.Default.Place, edit, remove) {
         if (place.address.isNotBlank()) Text(place.address)
         if (place.notes.isNotBlank()) Text(place.notes)
+        if (place.googlePlaceId != null) Text("Linked to Google Maps · view on the Map tab", style = MaterialTheme.typography.labelSmall)
     }
 }
 
