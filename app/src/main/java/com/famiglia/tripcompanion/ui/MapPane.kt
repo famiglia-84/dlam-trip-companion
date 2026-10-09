@@ -64,6 +64,7 @@ fun MapPane(model: MapViewModel, places: List<Place>, scopeId: Long?, save: (Str
     Column(modifier.fillMaxSize()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Explore with Google Maps", style = MaterialTheme.typography.titleLarge)
+            Text("Search or tap a named place on the map, then choose Save place link.", style = MaterialTheme.typography.bodySmall)
             Text("Google receives map requests, your search text and selected place IDs. Booking codes and private notes stay here.", style = MaterialTheme.typography.bodySmall)
             Row {
                 TextButton(onClick = { uriHandler.openUri("https://policies.google.com/privacy") }) { Text("Google privacy") }
@@ -95,6 +96,7 @@ fun MapPane(model: MapViewModel, places: List<Place>, scopeId: Long?, save: (Str
             properties = MapProperties(isMyLocationEnabled = false),
             uiSettings = MapUiSettings(myLocationButtonEnabled = false, mapToolbarEnabled = false),
             onMapLoaded = { mapLoaded = true },
+            onPOIClick = { place -> model.select(place.placeId) },
         ) {
             val locations = (state.pins + listOfNotNull(state.selected)).distinctBy { it.id }
             locations.forEach { location ->
@@ -113,7 +115,7 @@ fun MapPane(model: MapViewModel, places: List<Place>, scopeId: Long?, save: (Str
                     val savedPlace = places.firstOrNull { it.googlePlaceId == selected.id }
                     if (savedPlace != null) Text("Saved as ${savedPlace.name}", style = MaterialTheme.typography.labelLarge)
                     else {
-                        Button(onClick = { save(selected.id, query.ifBlank { "Saved place" }) }) { Text("Save place link") }
+                        Button(onClick = { save(selected.id, state.saveLabel.ifBlank { "Saved place" }) }, enabled = !state.busy) { Text("Save place link") }
                         Text("Add your own label and notes. Google details are refreshed online.", style = MaterialTheme.typography.bodySmall)
                     }
                 }

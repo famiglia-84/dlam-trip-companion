@@ -81,6 +81,19 @@ class MapViewModelTest {
         assertEquals("google-id", model.state.value.selected?.id)
     }
 
+    @Test fun tappingAnotherMapPlaceDoesNotReusePreviousSearchOrAutocompleteSession() = runTest {
+        model.changeQuery("Museum Bari"); model.search(); runCurrent()
+        model.select("museum-id", fromSearch = true); runCurrent()
+        assertEquals("Museum Bari", model.state.value.saveLabel)
+
+        model.select("cafe-id"); runCurrent()
+        assertEquals("cafe-id", model.state.value.selected?.id)
+        assertEquals("", model.state.value.saveLabel)
+        assertTrue(model.state.value.suggestions.isEmpty())
+        assertEquals(listOf("Museum Bari"), lookup.queries)
+        assertEquals(listOf("museum-id" to true, "cafe-id" to false), lookup.detailsCalls)
+    }
+
     @Test fun missingKeyAndProviderErrorsAreHandledWithoutLeakingSdkMessages() = runTest {
         val unavailable = MapViewModel(ApplicationProvider.getApplicationContext(), SavedStateHandle(), null)
         assertFalse(unavailable.configured)
