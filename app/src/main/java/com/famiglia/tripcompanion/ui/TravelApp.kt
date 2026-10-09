@@ -85,7 +85,11 @@ fun TravelApp(model: TravelViewModel) {
             Scaffold(
                 topBar = {
                     TopAppBar(
-                        title = { Column { Text("Trip Companion", fontWeight = FontWeight.SemiBold); Text("A little less planning. A little more adventure.", style = MaterialTheme.typography.labelSmall) } },
+                        title = { Column {
+                            Text("Trip Companion", fontWeight = FontWeight.SemiBold)
+                            if (route != "maps" && !(route == "trips" && selected != null && section == "Map"))
+                                Text("A little less planning. A little more adventure.", style = MaterialTheme.typography.labelSmall)
+                        } },
                         actions = { IconButton(onClick = model::cycleTheme) { Icon(Icons.Default.Contrast, "Theme: $theme. Change appearance") } },
                     )
                 },
