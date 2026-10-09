@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <!-- Compose's empty test host cannot reinstall caller-provided content after recreation.
+             Let window tests resize this host; MainActivity keeps its normal recreation behavior. -->
+        <activity
+            android:name="androidx.activity.ComponentActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|density|fontScale|uiMode" />
+    </application>
+</manifest>

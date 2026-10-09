@@ -1,5 +1,9 @@
 # Google Maps and place search
 
+Version 0.4 makes the map the main part of the screen. Search is a compact field with an arrow button and keyboard Search action. Results appear over the map and close after selection; submitting/searching or selecting dismisses the keyboard. The **Saved places** button shows linked places, the information button contains help/privacy/terms, and **Expand map** hides the search controls while preserving the selected-place card. Use the search/exit buttons or Android Back to restore the controls.
+
+The compact place card keeps **Save place link** visible below the map, with consistent 12 dp background padding on all four sides (dark green in the dark theme). Its chevron expands/collapses the full address and explanatory text. Short windows use one compact controls row with a **Map options** menu and a shorter place card. Google's map view stays above the card so its logo and map controls remain unobscured; search-result and provider attributions remain visible.
+
 Version 0.3.1 also lets you tap a named point of interest directly on the map, such as a restaurant, shop or attraction, without another search. Its name/address load in the selection card; choose **Save place link**, enter your own label and confirm in the place editor. Tapping alone never saves a record. An unrelated previous search is not reused as the new place's label. Blank map areas are not selectable places; zoom in to reveal more named locations. This uses the existing Places API, with no additional Google service required.
 
 Trip Companion 0.2 adds a Google Map in the main navigation and a Map tab inside each trip. Search for a place, address or city, select a result to see its location, then choose **Save place link**. Give it your own label, category and optional private notes. A trip's map shows its assigned places; the main map can show all linked saved places.
