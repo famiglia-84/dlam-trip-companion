@@ -45,6 +45,8 @@ class DayPlannerDeviceTest {
         compose.waitUntil(15_000) { compose.onAllNodesWithText("Sampletown").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("Sampletown").performClick()
         compose.onNodeWithText("Day plans").performClick()
+        // Selecting a section persists asynchronously; await its content before interacting.
+        compose.waitUntil(15_000) { compose.onAllNodesWithText("Suggest a day plan").fetchSemanticsNodes().isNotEmpty() }
     }
     @After fun teardown() {
         app.dayAi = NanoAi()

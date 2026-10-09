@@ -120,6 +120,11 @@ class MapLayoutDeviceTest {
         val savedAction = compose.onNodeWithTag("map-saved-places").fetchSemanticsNode().boundsInRoot
         assertEquals(48f, search.height, 1f) // Fixture uses 160 dpi and the standard text scale.
         assertEquals(selectedControls.center.x, savedAction.center.x, 1f)
+        compose.waitUntil(10_000) {
+            val safe = compose.onNodeWithTag("map-safe-content").fetchSemanticsNode().boundsInRoot
+            val sheet = compose.onNodeWithTag("map-card-surround").fetchSemanticsNode().boundsInRoot
+            kotlin.math.abs(safe.bottom + 8f - sheet.top) <= 1f
+        }
         val root = compose.onNodeWithTag("map-layout").fetchSemanticsNode().boundsInRoot
         val map = compose.onNodeWithTag("map-viewport").fetchSemanticsNode().boundsInRoot
         val surround = compose.onNodeWithTag("map-card-surround").fetchSemanticsNode().boundsInRoot
@@ -166,7 +171,12 @@ class MapLayoutDeviceTest {
             // Drag to the map's top: full-height expansion travels farther than the previous 75% sheet.
             swipe(Offset(center.x, 28f), Offset(center.x, viewportBeforeDrag.top + 24f - sheetBeforeDrag.top), durationMillis = 500)
         }
-        compose.waitUntil(10_000) { compose.onAllNodesWithTag("map-place-details").fetchSemanticsNodes().isNotEmpty() }
+        try {
+            compose.waitUntil(10_000) { compose.onAllNodesWithTag("map-place-details").fetchSemanticsNodes().isNotEmpty() }
+        } catch (timeout: ComposeTimeoutException) {
+            throw AssertionError("Drag did not expand: viewport=$viewportBeforeDrag, sheet=$sheetBeforeDrag\n" +
+                compose.onRoot(useUnmergedTree = true).printToString(), timeout)
+        }
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("map-controls").fetchSemanticsNodes().isEmpty() }
         compose.onNodeWithTag("map-search").assertDoesNotExist()
         compose.onAllNodesWithText("Luz").assertCountEquals(1)
