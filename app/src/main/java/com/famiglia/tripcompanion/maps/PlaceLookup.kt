@@ -8,6 +8,7 @@ import com.google.android.libraries.places.api.model.AutocompleteSessionToken
 import com.google.android.libraries.places.api.model.Place
 import com.google.android.libraries.places.api.net.FetchPlaceRequest
 import com.google.android.libraries.places.api.net.FindAutocompletePredictionsRequest
+import com.google.android.libraries.places.api.net.FetchResolvedPhotoUriRequest
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 
@@ -15,12 +16,24 @@ data class PlaceSuggestion(val id: String, val title: String, val subtitle: Stri
 data class MapLocation(
     val id: String, val name: String, val address: String,
     val latitude: Double, val longitude: Double, val attributions: List<String> = emptyList(),
+    val category: String = "",
+)
+
+data class PhotoCredit(val name: String, val uri: String?)
+data class PlacePhoto(val uri: String, val credits: List<PhotoCredit> = emptyList(), val attributionHtml: String = "")
+data class PlaceDetails(
+    val photos: List<PlacePhoto> = emptyList(), val rating: Double? = null, val ratingCount: Int? = null,
+    val hours: List<String> = emptyList(), val openNow: Boolean? = null,
+    val phone: String? = null, val website: String? = null, val attributions: List<String> = emptyList(),
+    val photosUnavailable: Boolean = false,
 )
 
 /** This boundary accepts only explicit search text or place IDs, never travel records. */
 interface PlaceLookup {
     suspend fun search(query: String): List<PlaceSuggestion>
     suspend fun details(id: String, fromSearch: Boolean = false): MapLocation
+    suspend fun thumbnail(id: String): PlacePhoto? = null
+    suspend fun moreDetails(id: String): PlaceDetails = PlaceDetails()
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -44,7 +57,7 @@ class GooglePlaceLookup private constructor(private val context: Context, privat
     override suspend fun details(id: String, fromSearch: Boolean): MapLocation {
         val cancellation = CancellationTokenSource()
         val request = FetchPlaceRequest.builder(id, listOf(
-            Place.Field.ID, Place.Field.DISPLAY_NAME, Place.Field.FORMATTED_ADDRESS, Place.Field.LOCATION,
+            Place.Field.ID, Place.Field.DISPLAY_NAME, Place.Field.FORMATTED_ADDRESS, Place.Field.LOCATION, Place.Field.PRIMARY_TYPE_DISPLAY_NAME,
         )).setCancellationToken(cancellation.token)
         if (fromSearch) {
             session?.let { request.setSessionToken(it) }
@@ -53,7 +66,40 @@ class GooglePlaceLookup private constructor(private val context: Context, privat
         val place = client.fetchPlace(request.build()).await(cancellation).place
         val location = requireNotNull(place.location) { "This place has no map location." }
         return MapLocation(id, place.displayName.orEmpty(), place.formattedAddress.orEmpty(),
-            location.latitude, location.longitude, place.attributions.orEmpty())
+            location.latitude, location.longitude, place.attributions.orEmpty(), place.primaryTypeDisplayName.orEmpty())
+    }
+
+    override suspend fun thumbnail(id: String): PlacePhoto? {
+        val cancellation = CancellationTokenSource()
+        val place = client.fetchPlace(FetchPlaceRequest.builder(id, listOf(Place.Field.PHOTO_METADATAS))
+            .setCancellationToken(cancellation.token).build()).await(cancellation).place
+        return place.photoMetadatas?.firstOrNull()?.let { photo(it, 288) }
+    }
+
+    override suspend fun moreDetails(id: String): PlaceDetails {
+        val cancellation = CancellationTokenSource()
+        val place = client.fetchPlace(FetchPlaceRequest.builder(id, listOf(
+            Place.Field.PHOTO_METADATAS, Place.Field.RATING, Place.Field.USER_RATING_COUNT,
+            Place.Field.CURRENT_OPENING_HOURS, Place.Field.OPENING_HOURS, Place.Field.UTC_OFFSET,
+            Place.Field.INTERNATIONAL_PHONE_NUMBER, Place.Field.WEBSITE_URI,
+            Place.Field.BUSINESS_STATUS,
+        )).setCancellationToken(cancellation.token).build()).await(cancellation).place
+        var photosUnavailable = false
+        val photos = place.photoMetadatas.orEmpty().take(2).mapNotNull {
+            try { photo(it, 720) }
+            catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+            catch (_: Exception) { photosUnavailable = true; null } // Keep ratings/hours usable when a photo is unavailable.
+        }
+        return PlaceDetails(photos, place.rating, place.userRatingCount,
+            (place.currentOpeningHours ?: place.openingHours)?.weekdayText.orEmpty(),
+            runCatching { place.isOpen }.getOrNull(), place.internationalPhoneNumber, place.websiteUri?.toString(), place.attributions.orEmpty(), photosUnavailable)
+    }
+
+    private suspend fun photo(metadata: com.google.android.libraries.places.api.model.PhotoMetadata, size: Int): PlacePhoto {
+        val cancellation = CancellationTokenSource()
+        val uri = requireNotNull(client.fetchResolvedPhotoUri(FetchResolvedPhotoUriRequest.builder(metadata)
+            .setMaxWidth(size).setMaxHeight(size).setCancellationToken(cancellation.token).build()).await(cancellation).uri)
+        return PlacePhoto(uri.toString(), metadata.authorAttributions?.asList().orEmpty().map { PhotoCredit(it.name, it.uri) }, metadata.attributions.orEmpty())
     }
 
     companion object {

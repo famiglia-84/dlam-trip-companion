@@ -1,6 +1,7 @@
 package com.famiglia.tripcompanion.data
 
 import androidx.room.Entity
+import androidx.room.ColumnInfo
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -58,6 +59,7 @@ data class Place(
     val address: String = "",
     val notes: String = "",
     val googlePlaceId: String? = null,
+    @ColumnInfo(defaultValue = "''") val photoUri: String = "",
 )
 
 @Entity(

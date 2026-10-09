@@ -15,6 +15,7 @@ All development, compilation and automated testing can happen in Codex cloud and
 - Single-column phone layout, two-column trip cards on medium windows, and a trip-list/detail layout with a navigation rail at 840dp and above. Selection, section and open form drafts survive activity recreation and window changes.
 - A cloud workflow that tests, lints, builds and uploads a debug APK.
 - Optional embedded Google Maps and place search. Save Google place links and view linked places on a trip map or the global map. See [Google Maps setup and privacy](docs/GOOGLE_MAPS.md).
+- Compact saved-place rows with rounded-square thumbnails, editable personal photos and direct in-app map navigation. Expand a place's map card for online photos, ratings, hours and Directions/Share/Call/Website actions when available.
 
 Trip deletion removes its bookings and day plans, but keeps saved places as unassigned. Deleting a place keeps existing activities and their copied notes. Deleting a day removes its activities. Deletions require confirmation. Trip-date changes that would leave an existing day plan outside the new dates are rejected: move or delete that plan first.
 
@@ -57,6 +58,8 @@ The repository is the integration boundary. Future Gmail import or AI providers 
 
 Room version 2 adds a nullable Google place ID to saved places. Its explicit version-1 migration preserves existing travel records. Version 0.4.1 prefills a selected place's name and address in the save dialog; confirming Save persists those editable fields and the place ID locally with your notes. Coordinates, search-result lists and provider attributions remain in memory. See the [Maps guide](docs/GOOGLE_MAPS.md) for provider-content storage considerations. Maps Compose 6.4.3 and Places SDK 4.4.1 remain pinned. Search state cancels superseded requests and reports connection/configuration failures without displaying raw SDK errors.
 
+Room version 3 adds an optional personal-photo URI through an explicit version-2 migration. Google photos and richer details are requested online, with image caches disabled and no persistence of Google photo URLs, ratings, opening hours or contact details. Thumbnail metadata uses a bounded, short-lived memory cache. Choosing a personal photo stores its document URI/read permission; offline access depends on the selected document provider and source availability.
+
 ## Tests and device checks
 
 `./gradlew testDebugUnitTest` runs strict date/time and trip-status tests, Robolectric-backed Room tests (CRUD, cascading deletes, activity ordering and close/reopen persistence), and Compose/Robolectric layout and saved-selection tests. These exercise Android APIs on the JVM and do not need an emulator. `./gradlew lintDebug` runs Android lint; `./gradlew assembleDebug` builds an installable APK.
@@ -84,7 +87,7 @@ The workflow decodes the key into a temporary runner file, signs the debug APK a
 
 ## Limits and next phases
 
-Google Maps and place search are optional online features introduced in version 0.2; version 0.3 adds optional on-device AI-assisted day planning. There is no Gmail access, account login or remote synchronization. Photos are selected manually; the supplied mountain illustration is original fallback artwork. No third-party destination photos are bundled. Times do not encode time zones, and confirmations are manually entered. Activities are reordered with buttons rather than drag-and-drop.
+Google Maps and place search are optional online features introduced in version 0.2; version 0.3 adds optional on-device AI-assisted day planning. Version 0.5 adds online Google place photos and richer map cards alongside manually selected personal photos. There is no Gmail access, account login or remote synchronization. The supplied mountain illustration is original fallback artwork; no third-party destination photos are bundled. Times do not encode time zones, and confirmations are manually entered. Activities are reordered with buttons rather than drag-and-drop.
 
 Android application sandboxing protects the local database, but it is not separately encrypted. Cloud backup is disabled because bookings and notes may contain personal information. Clearing app storage or uninstalling deletes travel data. A device hinge is not explicitly mapped; adaptation follows available window width. Actual handset behavior and installation must be checked on the device.
 

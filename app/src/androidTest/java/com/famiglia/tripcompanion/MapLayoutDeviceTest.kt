@@ -6,7 +6,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.Density
@@ -57,8 +59,10 @@ class MapLayoutDeviceTest {
                         topBar = { TopAppBar(title = { Text("Trip Companion") }) },
                         bottomBar = { NavigationBar { Text("My trips · Saved places · Map") } },
                     ) { padding ->
-                        MapLayout(model, places, null, { id, label, address -> saved += Triple(id, label, address) }, Modifier.padding(padding).consumeWindowInsets(padding)) { modifier ->
-                            Surface(modifier, color = MaterialTheme.colorScheme.secondaryContainer) { Text("Controlled map renderer") }
+                        MapLayout(model, places, null, { id, label, address -> saved += Triple(id, label, address) }, Modifier.padding(padding).consumeWindowInsets(padding)) { modifier, safePadding ->
+                            Surface(modifier, color = MaterialTheme.colorScheme.secondaryContainer) {
+                                Box(Modifier.fillMaxSize().padding(safePadding).testTag("map-safe-content")) { Text("Controlled map renderer") }
+                            }
                         }
                     }
                 }
@@ -115,10 +119,11 @@ class MapLayoutDeviceTest {
         val map = compose.onNodeWithTag("map-viewport").fetchSemanticsNode().boundsInRoot
         val surround = compose.onNodeWithTag("map-card-surround").fetchSemanticsNode().boundsInRoot
         val card = compose.onNodeWithTag("map-place-card").fetchSemanticsNode().boundsInRoot
-        assertTrue("Map should occupy most of the selected-place screen", map.height > root.height * 0.5f)
-        assertEquals(map.bottom, surround.top, 1f)
+        val safeMap = compose.onNodeWithTag("map-safe-content").fetchSemanticsNode().boundsInRoot
+        assertTrue("Visible map should occupy most of the selected-place screen", safeMap.height > root.height * 0.5f)
+        assertEquals(safeMap.bottom, surround.top, 1f)
         assertEquals(card.left - surround.left, card.top - surround.top, 1f)
-        assertEquals(card.left - surround.left, surround.bottom - card.bottom, 1f)
+        assertEquals(12f, root.bottom - map.bottom, 1f)
         assertEquals(card.center.x, compose.onNodeWithTag("map-save").fetchSemanticsNode().boundsInRoot.center.x, 1f)
         assertTrue(saved.isEmpty())
         compose.onNodeWithTag("map-save").performClick()
@@ -147,6 +152,27 @@ class MapLayoutDeviceTest {
         assertTrue(saved.isEmpty())
     }
 
+    @Test fun draggingTheSheetLoadsDetailsOnceAndBackAndCloseKeepMapUsable() {
+        selectPlace()
+        assertTrue(lookup.richCalls.isEmpty())
+        compose.onNodeWithTag("map-card-surround").performTouchInput {
+            swipe(Offset(center.x, 28f), Offset(center.x, -200f), durationMillis = 300)
+        }
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("map-place-details").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("★ 4.5 · 12 ratings").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Monday: 09:00–17:00").performScrollTo().assertIsDisplayed()
+        assertEquals(listOf("luz-id"), lookup.richCalls)
+        device.pressBack()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("map-place-details").fetchSemanticsNodes().isEmpty() }
+        compose.onNodeWithTag("map-save").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Expand place details").performClick()
+        assertEquals(listOf("luz-id"), lookup.richCalls)
+        compose.onNodeWithContentDescription("Close place").performClick()
+        compose.onNodeWithTag("map-save").assertDoesNotExist()
+        compose.onNodeWithTag("map-search").assertIsDisplayed()
+        assertTrue(saved.isEmpty())
+    }
+
     @Test fun shortAndWideWindowsKeepSaveUsableAndSavedPlacesDoNotOfferDuplicates() {
         selectPlace()
         device.executeShellCommand("wm size 400x520")
@@ -172,6 +198,11 @@ class MapLayoutDeviceTest {
 
     private class FakePlaces : PlaceLookup {
         val searches = mutableListOf<String>()
+        val richCalls = mutableListOf<String>()
+        override suspend fun moreDetails(id: String): PlaceDetails {
+            richCalls += id
+            return PlaceDetails(rating = 4.5, ratingCount = 12, openNow = true, hours = listOf("Monday: 09:00–17:00"))
+        }
         override suspend fun search(query: String): List<PlaceSuggestion> {
             searches += query
             return listOf(PlaceSuggestion("luz-id", "Luz restaurant", "Bari"), PlaceSuggestion("museum-id", "Museum", "Bari"))

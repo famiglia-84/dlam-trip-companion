@@ -41,7 +41,7 @@ class MigrationTest {
             old.version = 1
         }
         val upgraded = Room.databaseBuilder(context, TripDatabase::class.java, name)
-            .addMigrations(TripDatabase.MIGRATION_1_2).allowMainThreadQueries().build()
+            .addMigrations(TripDatabase.MIGRATION_1_2, TripDatabase.MIGRATION_2_3).allowMainThreadQueries().build()
         try {
             val repo = TripRepository(upgraded)
             val data = repo.data.first()
@@ -49,10 +49,45 @@ class MigrationTest {
             assertEquals("ABC123", data.reservations.single().confirmation)
             assertEquals("Private place notes", data.places.single().notes)
             assertNull(data.places.single().googlePlaceId)
+            assertEquals("", data.places.single().photoUri)
             assertEquals("Explore", data.plans.single().title)
             assertEquals(1L, data.activities.single().placeId)
             repo.save(data.places.single().copy(googlePlaceId = "google-id"))
             assertEquals("google-id", repo.data.first().places.single().googlePlaceId)
+        } finally { upgraded.close(); context.deleteDatabase(name) }
+    }
+
+    @Test fun upgradesInstalledVersionTwoAndPreservesLinkedPlacesAndUserEdits() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val name = "migration-two-${UUID.randomUUID()}.db"
+        val schema = javaClass.classLoader!!.getResourceAsStream("com.famiglia.tripcompanion.data.TripDatabase/2.json")!!
+            .bufferedReader().use { JSONObject(it.readText()).getJSONObject("database") }
+        context.openOrCreateDatabase(name, Context.MODE_PRIVATE, null).use { old ->
+            val entities = schema.getJSONArray("entities")
+            for (i in 0 until entities.length()) {
+                val entity = entities.getJSONObject(i)
+                fun sql(value: String) = value.replace("\${TABLE_NAME}", entity.getString("tableName"))
+                old.execSQL(sql(entity.getString("createSql")))
+                val indices = entity.optJSONArray("indices")
+                if (indices != null) for (j in 0 until indices.length()) old.execSQL(sql(indices.getJSONObject(j).getString("createSql")))
+            }
+            val setup = schema.getJSONArray("setupQueries")
+            for (i in 0 until setup.length()) old.execSQL(setup.getString(i))
+            old.execSQL("INSERT INTO places VALUES(1, NULL, 'My café', 'CAFE', 'My meeting point', 'Private notes', 'google-id')")
+            old.version = 2
+        }
+        val upgraded = Room.databaseBuilder(context, TripDatabase::class.java, name)
+            .addMigrations(TripDatabase.MIGRATION_2_3).allowMainThreadQueries().build()
+        try {
+            val repo = TripRepository(upgraded)
+            val place = repo.data.first().places.single()
+            assertEquals("My café", place.name)
+            assertEquals("My meeting point", place.address)
+            assertEquals("Private notes", place.notes)
+            assertEquals("google-id", place.googlePlaceId)
+            assertEquals("", place.photoUri)
+            repo.save(place.copy(photoUri = "content://personal-photo/1"))
+            assertEquals("content://personal-photo/1", repo.data.first().places.single().photoUri)
         } finally { upgraded.close(); context.deleteDatabase(name) }
     }
 }

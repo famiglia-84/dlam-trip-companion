@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.famiglia.tripcompanion.data.*
+import com.famiglia.tripcompanion.maps.MapViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -149,17 +150,36 @@ fun ReservationEditor(existing: Reservation?, trip: Trip, model: TravelViewModel
 
 @Composable
 fun PlaceEditor(existing: Place?, defaultTripId: Long?, trips: List<Trip>, model: TravelViewModel,
-    suggestedGoogleId: String? = null, suggestedName: String = "", suggestedAddress: String = "", onDismiss: () -> Unit) {
+    suggestedGoogleId: String? = null, suggestedName: String = "", suggestedAddress: String = "", photos: MapViewModel? = null, onDismiss: () -> Unit) {
     var name by rememberSaveable { mutableStateOf(existing?.name ?: suggestedName) }
     var googleId by rememberSaveable { mutableStateOf(existing?.googlePlaceId ?: suggestedGoogleId) }
     var category by rememberSaveable { mutableStateOf(existing?.category ?: PlaceCategory.ATTRACTION.name) }
     var tripId by rememberSaveable { mutableStateOf(existing?.tripId ?: defaultTripId) }
     var address by rememberSaveable { mutableStateOf(existing?.address ?: suggestedAddress) }
     var notes by rememberSaveable { mutableStateOf(existing?.notes ?: "") }
+    var photoUri by rememberSaveable { mutableStateOf(existing?.photoUri ?: "") }
+    var photoError by remember { mutableStateOf<String?>(null) }
+    val context = LocalContext.current
+    val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let {
+            try {
+                context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                photoUri = uri.toString(); photoError = null
+            } catch (_: SecurityException) { photoError = "Choose a photo stored on your device so it remains available." }
+        }
+    }
+    val photo = rememberPlaceThumbnail(googleId, photoUri, photos)
     val options = listOf("All trips / unassigned") + trips.map { "${it.destination} · ${it.startDate} (#${it.id})" }
     Editor(if (existing == null) "Save a place" else "Edit saved place", onDismiss, {
-        model.save(Place(existing?.id ?: 0, tripId, name, category, address, notes, googleId))
+        model.save(Place(existing?.id ?: 0, tripId, name, category, address, notes, googleId, photoUri))
     }) {
+        PlaceImage(photoUri, photo, name, Modifier.fillMaxWidth().height(120.dp))
+        if (photoUri.isBlank()) PhotoCredits(photo)
+        Row {
+            TextButton(onClick = { photoPicker.launch(arrayOf("image/*")) }) { Text("Choose your photo") }
+            if (photoUri.isNotBlank()) TextButton(onClick = { photoUri = "" }) { Text("Use default image") }
+        }
+        photoError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         Field("Place name", name, { name = it })
         Choices("Category", PlaceCategory.valueOf(category).label, PlaceCategory.entries.map { it.label }) { chosen -> category = PlaceCategory.entries.first { it.label == chosen }.name }
         Choices("Trip", options.getOrElse(trips.indexOfFirst { it.id == tripId } + 1) { options.first() }, options) { chosen ->
