@@ -68,7 +68,7 @@ internal fun MapLayout(
         val shortWindow = maxHeight < 420.dp
         Column(Modifier.fillMaxSize()) {
             if (!expandedMap) {
-                Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
+                Column(Modifier.fillMaxWidth().testTag("map-controls").padding(horizontal = 12.dp, vertical = 8.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         OutlinedTextField(
                             value = query, onValueChange = model::changeQuery,

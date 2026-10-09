@@ -59,9 +59,11 @@ class MapLayoutDeviceTest {
     }
 
     @After fun tearDown() {
-        compose.runOnIdle { model.clearMap() }
-        device.executeShellCommand("wm size reset")
-        device.executeShellCommand("wm density reset")
+        try { compose.runOnIdle { model.clearMap() } }
+        finally {
+            device.executeShellCommand("wm size reset")
+            device.executeShellCommand("wm density reset")
+        }
     }
 
     private fun selectPlace() {
@@ -70,12 +72,16 @@ class MapLayoutDeviceTest {
     }
 
     @Test fun searchResultsOverlayTheMapAndSelectionKeepsSaveVisibleWithUniformPadding() {
-        val originalHeight = compose.onNodeWithTag("map-viewport").fetchSemanticsNode().boundsInRoot.height
         compose.onNodeWithTag("map-search").performTextInput("Bari")
         assertTrue(lookup.searches.isEmpty())
         compose.onNodeWithContentDescription("Search places").performClick()
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("map-results").fetchSemanticsNodes().isNotEmpty() }
-        assertEquals(originalHeight, compose.onNodeWithTag("map-viewport").fetchSemanticsNode().boundsInRoot.height, 1f)
+        // Compare sibling bounds in the same layout, rather than an earlier IME/window size.
+        val searchRoot = compose.onNodeWithTag("map-layout").fetchSemanticsNode().boundsInRoot
+        val controls = compose.onNodeWithTag("map-controls").fetchSemanticsNode().boundsInRoot
+        val searchMap = compose.onNodeWithTag("map-viewport").fetchSemanticsNode().boundsInRoot
+        assertEquals(searchRoot.height - controls.height, searchMap.height, 1f)
+        assertEquals(controls.bottom, searchMap.top, 1f)
         compose.onNodeWithText("Luz restaurant").performClick()
         compose.onNodeWithTag("map-results").assertDoesNotExist()
         compose.onNodeWithTag("map-save").assertIsDisplayed()
