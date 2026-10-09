@@ -7,6 +7,8 @@ import com.famiglia.tripcompanion.maps.*
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.test.*
 import org.junit.After
 import org.junit.Assert.*
@@ -115,11 +117,73 @@ class MapViewModelTest {
         assertTrue(model.state.value.pins.isEmpty())
     }
 
+    @Test fun richerDetailsAreExplicitAndCachedOnlyForTheCurrentSelection() = runTest {
+        model.select("cafe-id"); runCurrent()
+        assertTrue(lookup.richCalls.isEmpty())
+        model.loadDetails(); runCurrent()
+        assertEquals(listOf("cafe-id"), lookup.richCalls)
+        assertEquals(4.5, model.state.value.details?.rating)
+        model.loadDetails(); runCurrent()
+        assertEquals(1, lookup.richCalls.size)
+        model.dismissSelection()
+        assertNull(model.state.value.selected)
+        assertNull(model.state.value.details)
+    }
+
+    @Test fun aLateCancelledRichResponseCannotReplaceTheNewSelection() = runTest {
+        model.select("old-id"); runCurrent()
+        val gate = CompletableDeferred<Unit>()
+        lookup.richBarrier = gate
+        model.loadDetails(); runCurrent()
+        model.select("new-id"); runCurrent()
+        lookup.richBarrier = null
+        model.loadDetails(); runCurrent()
+        gate.complete(Unit); runCurrent()
+        assertEquals("new-id", model.state.value.selected?.id)
+        assertEquals(listOf("new-id hours"), model.state.value.details?.hours)
+        assertFalse(model.state.value.detailsBusy)
+    }
+
+    @Test fun richerFailuresKeepBasicDetailsAndAllowAnExplicitRetry() = runTest {
+        model.select("cafe-id"); runCurrent()
+        lookup.richFailure = true
+        model.loadDetails(); runCurrent()
+        assertEquals("cafe-id", model.state.value.selected?.id)
+        assertFalse(model.state.value.detailsMessage.orEmpty().contains("private request"))
+        assertNotNull(model.state.value.detailsMessage)
+        lookup.richFailure = false
+        model.loadDetails(); runCurrent()
+        assertNotNull(model.state.value.details)
+        assertNull(model.state.value.detailsMessage)
+    }
+
+    @Test fun thumbnailsSendOnlyIdsAndReuseABoundedMemoryCache() = runTest {
+        model.thumbnail("first-id"); model.thumbnail("first-id")
+        assertEquals(listOf("first-id"), lookup.photoCalls)
+        repeat(20) { model.thumbnail("id-$it") }
+        model.thumbnail("first-id")
+        assertEquals(2, lookup.photoCalls.count { it == "first-id" })
+        assertTrue(lookup.queries.isEmpty())
+        assertTrue(lookup.detailsCalls.isEmpty())
+    }
+
     private class FakeLookup : PlaceLookup {
         val queries = mutableListOf<String>()
         val detailsCalls = mutableListOf<Pair<String, Boolean>>()
         var barrier: CompletableDeferred<Unit>? = null
         var failedId: String? = null
+        val richCalls = mutableListOf<String>()
+        val photoCalls = mutableListOf<String>()
+        var richBarrier: CompletableDeferred<Unit>? = null
+        var richFailure = false
+        override suspend fun thumbnail(id: String): PlacePhoto? { photoCalls += id; return null }
+        override suspend fun moreDetails(id: String): PlaceDetails {
+            richCalls += id
+            val gate = richBarrier
+            if (gate != null) withContext(NonCancellable) { gate.await() }
+            if (richFailure) error("private request")
+            return PlaceDetails(rating = 4.5, hours = listOf("$id hours"))
+        }
         override suspend fun search(query: String): List<PlaceSuggestion> {
             queries += query
             barrier?.await()

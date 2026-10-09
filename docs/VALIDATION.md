@@ -1,5 +1,13 @@
 # Validation
 
+## Place cards and photos, version 0.5.0
+
+All **45 local tests pass** with no failures/errors/skips. They include a Room schema-1-to-3 upgrade that preserves all travel tables, a schema-2-to-3 upgrade retaining linked places/custom labels/addresses/notes, personal-photo URI persistence, explicit richer-detail requests, cancellation of stale results, bounded thumbnail caching and public map-link construction. The app and instrumentation APKs compile with the pinned toolchain.
+
+Native tests exercise compact saved-place rows, Edit and exact-ID thumbnail navigation through the actual app graph, manual-entry search prefilling without an automatic request, sheet dragging/expansion/collapse/Back/Close, on-demand detail fetching, save actions, map attribution padding, keyboard dismissal and narrow/wide windows. They use a controlled provider and map renderer to avoid live Google requests. The APK workflow requires these emulator tests to pass before publishing an installable artifact.
+
+Live Google photo responses/credits, API billing, contact/hour availability, external app actions, document-provider permissions and Samsung folding behavior still require the device checks in [the Maps guide](GOOGLE_MAPS.md). Google storage terms could not be fetched from this environment; the guide preserves the unresolved storage consideration for previously added confirmed name/address fields. Google photos and new rich fields are not stored in Room or persistent image caches.
+
 Cloud validation on 9 October 2026 used JDK 21, Gradle 8.11.1, AGP 8.10.1, Kotlin 2.1.20 and Android SDK/build-tools 36.
 
 ```bash

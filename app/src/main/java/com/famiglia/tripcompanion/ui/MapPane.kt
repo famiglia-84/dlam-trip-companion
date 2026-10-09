@@ -2,6 +2,7 @@ package com.famiglia.tripcompanion.ui
 
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
@@ -14,15 +15,27 @@ import com.google.android.gms.maps.model.LatLngBounds
 import com.google.maps.android.compose.*
 import kotlinx.coroutines.delay
 
+/** Controlled UI tests use the real navigation/layout without requesting Google map tiles. */
+internal val LocalMapRenderer = staticCompositionLocalOf<(@Composable (Modifier, PaddingValues) -> Unit)?> { null }
+
 @Composable
-fun MapPane(model: MapViewModel, places: List<Place>, scopeId: Long?, save: (String, String, String) -> Unit, modifier: Modifier = Modifier) {
+fun MapPane(model: MapViewModel, places: List<Place>, scopeId: Long?, save: (String, String, String) -> Unit, modifier: Modifier = Modifier,
+    requestedPlaceId: String? = null, consumedRequest: () -> Unit = {}) {
     val state by model.state.collectAsStateWithLifecycle()
+    val renderer = LocalMapRenderer.current
+    LaunchedEffect(scopeId, requestedPlaceId) {
+        model.activateScope(scopeId)
+        requestedPlaceId?.let { model.select(it); consumedRequest() }
+    }
+    if (renderer != null) {
+        MapLayout(model, places, scopeId, save, modifier, map = renderer)
+        return
+    }
     val camera = rememberCameraPositionState()
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
     var mapLoaded by remember { mutableStateOf(false) }
     var mapSlow by remember { mutableStateOf(false) }
-    LaunchedEffect(scopeId) { model.activateScope(scopeId) }
     LaunchedEffect(mapLoaded, model.configured) {
         if (model.configured && !mapLoaded) { delay(15_000); mapSlow = true } else mapSlow = false
     }
@@ -41,9 +54,10 @@ fun MapPane(model: MapViewModel, places: List<Place>, scopeId: Long?, save: (Str
         keyboard?.hide(); focus.clearFocus()
         model.select(id)
     }
-    MapLayout(model, places, scopeId, save, modifier, mapSlow) { mapModifier ->
+    MapLayout(model, places, scopeId, save, modifier, mapSlow) { mapModifier, padding ->
         GoogleMap(
             modifier = mapModifier.testTag("google-map"), cameraPositionState = camera,
+            contentPadding = padding,
             properties = MapProperties(isMyLocationEnabled = false),
             uiSettings = MapUiSettings(myLocationButtonEnabled = false, mapToolbarEnabled = false),
             onMapLoaded = { mapLoaded = true },

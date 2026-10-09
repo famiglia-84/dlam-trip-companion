@@ -59,8 +59,8 @@ class PlaceEditorDeviceTest {
         compose.onNodeWithText("Cancel").performClick()
         assertTrue(runBlocking { app.repository.data.first().places.isEmpty() })
         compose.runOnIdle { visible = true }
-        compose.onNodeWithText("Place name").performTextReplacement("My café")
-        compose.onNodeWithText("Address").performTextReplacement("My meeting point")
+        compose.onNodeWithText("Place name").performScrollTo().performTextReplacement("My café")
+        compose.onNodeWithText("Address").performScrollTo().performTextReplacement("My meeting point")
         compose.onNodeWithText("Save").performClick()
         compose.waitUntil(15_000) { !visible }
         val stored = runBlocking { app.repository.data.first().places.single() }

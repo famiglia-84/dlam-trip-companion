@@ -39,11 +39,16 @@ interface TripDao {
     @Delete suspend fun delete(activity: PlanActivity)
 }
 
-@Database(entities = [Trip::class, Reservation::class, Place::class, DayPlan::class, PlanActivity::class], version = 2, exportSchema = true)
+@Database(entities = [Trip::class, Reservation::class, Place::class, DayPlan::class, PlanActivity::class], version = 3, exportSchema = true)
 abstract class TripDatabase : RoomDatabase() {
     abstract fun dao(): TripDao
 
     companion object {
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE places ADD COLUMN photoUri TEXT NOT NULL DEFAULT ''")
+            }
+        }
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE places ADD COLUMN googlePlaceId TEXT")

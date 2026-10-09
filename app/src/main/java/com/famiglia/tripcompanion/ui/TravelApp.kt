@@ -68,6 +68,7 @@ fun TravelApp(model: TravelViewModel) {
     var mapPlaceId by rememberSaveable { mutableStateOf<String?>(null) }
     var mapPlaceLabel by rememberSaveable { mutableStateOf("") }
     var mapPlaceAddress by rememberSaveable { mutableStateOf("") }
+    var requestedMapPlace by rememberSaveable { mutableStateOf<String?>(null) }
     fun edit(kind: String, id: Long = 0, parent: Long = 0) {
         editor = kind; editId = id; parentId = parent; mapPlaceId = null; mapPlaceLabel = ""; mapPlaceAddress = ""
     }
@@ -76,6 +77,14 @@ fun TravelApp(model: TravelViewModel) {
         mapPlaceId = id; mapPlaceLabel = label; mapPlaceAddress = address
     }
     fun remove(kind: String, id: Long) { deletion = kind; deletionId = id }
+    fun openSavedPlace(place: Place) {
+        requestedMapPlace = place.googlePlaceId
+        if (place.googlePlaceId == null) {
+            maps.changeQuery(listOf(place.name, place.address).filter(String::isNotBlank).joinToString(" "))
+            model.perform { snacks.showSnackbar("Search and select the correct place. Your saved entry is unchanged.") }
+        }
+        navigator.navigate("maps") { launchSingleTop = true }
+    }
 
     LaunchedEffect(model) { model.messages.collect { snacks.showSnackbar(it) } }
     BackHandler(enabled = route == "trips" && selected != null && editor.isBlank() && deletion.isBlank()) { model.selectTrip(null) }
@@ -87,11 +96,14 @@ fun TravelApp(model: TravelViewModel) {
                 topBar = {
                     TopAppBar(
                         title = { Column {
-                            Text("Trip Companion", fontWeight = FontWeight.SemiBold)
-                            if (route != "maps" && !(route == "trips" && selected != null && section == "Map"))
+                            Text(if (route == "places") "Saved places" else "Trip Companion", fontWeight = FontWeight.SemiBold)
+                            if (route != "maps" && route != "places" && !(route == "trips" && selected != null && section == "Map"))
                                 Text("A little less planning. A little more adventure.", style = MaterialTheme.typography.labelSmall)
                         } },
-                        actions = { IconButton(onClick = model::cycleTheme) { Icon(Icons.Default.Contrast, "Theme: $theme. Change appearance") } },
+                        actions = {
+                            if (route == "places") IconButton(onClick = { edit("place") }) { Icon(Icons.Default.Add, "Save a place") }
+                            IconButton(onClick = model::cycleTheme) { Icon(Icons.Default.Contrast, "Theme: $theme. Change appearance") }
+                        },
                     )
                 },
                 bottomBar = {
@@ -125,19 +137,19 @@ fun TravelApp(model: TravelViewModel) {
                                     TripsPane(data.trips, selected, { model.selectTrip(it); model.selectSection("Reservations") }, { edit("trip") }, Modifier.width(340.dp), true)
                                     VerticalDivider()
                                     if (trip == null) EmptyState("Where will you go next?", "Choose a trip to see your bookings, day plans and favourite places side by side.", Icons.Default.Explore, Modifier.weight(1f))
-                                    else TripDetails(trip, data, section, model::selectSection, { model.selectTrip(null) }, ::edit, ::remove, { item, delta -> model.perform { model.move(item, delta) } }, Modifier.weight(1f), maps, ::saveMapPlace)
+                                    else TripDetails(trip, data, section, model::selectSection, { model.selectTrip(null) }, ::edit, ::remove, { item, delta -> model.perform { model.move(item, delta) } }, Modifier.weight(1f), maps, ::saveMapPlace, ::openSavedPlace)
                                 }
                             } else {
                                 Box(Modifier.fillMaxSize().testTag("compact-layout")) {
                                     if (trip == null) TripsPane(data.trips, selected, { model.selectTrip(it); model.selectSection("Reservations") }, { edit("trip") }, Modifier.fillMaxSize())
-                                    else TripDetails(trip, data, section, model::selectSection, { model.selectTrip(null) }, ::edit, ::remove, { item, delta -> model.perform { model.move(item, delta) } }, Modifier.fillMaxSize(), maps, ::saveMapPlace)
+                                    else TripDetails(trip, data, section, model::selectSection, { model.selectTrip(null) }, ::edit, ::remove, { item, delta -> model.perform { model.move(item, delta) } }, Modifier.fillMaxSize(), maps, ::saveMapPlace, ::openSavedPlace)
                                 }
                             }
                         }
                         composable("places") {
-                            PlacesPane(data.places, data.trips, { edit("place") }, { edit("place", it.id) }, { remove("place", it.id) })
+                            SavedPlacesPane(data.places, data.trips, maps, ::openSavedPlace, { edit("place", it.id) }, { remove("place", it.id) })
                         }
-                        composable("maps") { MapPane(maps, data.places, null, ::saveMapPlace) }
+                        composable("maps") { MapPane(maps, data.places, null, ::saveMapPlace, requestedPlaceId = requestedMapPlace, consumedRequest = { requestedMapPlace = null }) }
                     }
                 }
             }
@@ -145,7 +157,7 @@ fun TravelApp(model: TravelViewModel) {
             when (editor) {
                 "trip" -> TripEditor(data.trips.firstOrNull { it.id == editId }, model, { id -> model.selectTrip(id) }, { editor = "" })
                 "reservation" -> data.trips.firstOrNull { it.id == parentId }?.let { trip -> ReservationEditor(data.reservations.firstOrNull { it.id == editId }, trip, model) { editor = "" } }
-                "place" -> PlaceEditor(data.places.firstOrNull { it.id == editId }, parentId.takeIf { it != 0L }, data.trips, model, mapPlaceId, mapPlaceLabel, mapPlaceAddress) { editor = "" }
+                "place" -> PlaceEditor(data.places.firstOrNull { it.id == editId }, parentId.takeIf { it != 0L }, data.trips, model, mapPlaceId, mapPlaceLabel, mapPlaceAddress, maps) { editor = "" }
                 "day" -> data.trips.firstOrNull { it.id == parentId }?.let { trip -> DayEditor(data.plans.firstOrNull { it.id == editId }, trip, model) { editor = "" } }
                 "planner" -> data.trips.firstOrNull { it.id == parentId }?.let { trip ->
                     val planner: DayPlannerViewModel = viewModel()
@@ -239,7 +251,7 @@ private fun DestinationPhoto(trip: Trip, modifier: Modifier) {
 @Composable
 private fun TripDetails(trip: Trip, data: TravelData, section: String, sectionChange: (String) -> Unit, back: () -> Unit,
     edit: (String, Long, Long) -> Unit, remove: (String, Long) -> Unit, move: (PlanActivity, Int) -> Unit, modifier: Modifier,
-    maps: MapViewModel, saveMapPlace: (String, String, String) -> Unit) {
+    maps: MapViewModel, saveMapPlace: (String, String, String) -> Unit, openMapPlace: (Place) -> Unit) {
     Column(modifier) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = back) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back to my trips") }
@@ -320,39 +332,12 @@ private fun TripDetails(trip: Trip, data: TravelData, section: String, sectionCh
                 }
                 "Saved places" -> {
                     val places = data.places.filter { it.tripId == trip.id }
-                    item { SectionHeading("Places worth remembering", "Save a place") { edit("place", 0, trip.id) } }
+                    item { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { IconButton(onClick = { edit("place", 0, trip.id) }) { Icon(Icons.Default.Add, "Save a place") } } }
                     if (places.isEmpty()) item { InlineEmpty("Keep your favourites nearby.", "Save a place for this trip, or choose an unassigned place when adding an activity.") }
-                    items(places, key = { "place-${it.id}" }) { place -> PlaceCard(place, null, { edit("place", place.id, trip.id) }, { remove("place", place.id) }) }
+                    items(places, key = { "place-${it.id}" }) { place -> SavedPlaceCard(place, null, maps, { openMapPlace(place) }, { edit("place", place.id, trip.id) }, { remove("place", place.id) }) }
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun PlacesPane(places: List<Place>, trips: List<Trip>, add: () -> Unit, edit: (Place) -> Unit, remove: (Place) -> Unit) {
-    var query by rememberSaveable { mutableStateOf("") }
-    var category by rememberSaveable { mutableStateOf("All") }
-    Column(Modifier.fillMaxSize()) {
-        PaneHeading("Saved places", "The spots you don't want to forget.", "Save a place", add)
-        OutlinedTextField(query, { query = it }, label = { Text("Search places") }, singleLine = true, leadingIcon = { Icon(Icons.Default.Search, null) }, modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp))
-        Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            (listOf("All") + PlaceCategory.entries.map { it.label }).forEach { label -> FilterChip(selected = category == label, onClick = { category = label }, label = { Text(label) }) }
-        }
-        val filtered = places.filter { (category == "All" || PlaceCategory.valueOf(it.category).label == category) && (it.name.contains(query, true) || it.address.contains(query, true) || it.notes.contains(query, true)) }
-        if (filtered.isEmpty()) EmptyState(if (places.isEmpty()) "Collect a little inspiration" else "No places found", if (places.isEmpty()) "Save a café, a landmark or somewhere special. Assign it to a trip now or later." else "Try another search or category.", Icons.Default.BookmarkBorder, Modifier.weight(1f))
-        else LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            items(filtered, key = { it.id }) { place -> PlaceCard(place, trips.firstOrNull { it.id == place.tripId }?.destination ?: "Unassigned", { edit(place) }, { remove(place) }) }
-        }
-    }
-}
-
-@Composable
-private fun PlaceCard(place: Place, tripLabel: String?, edit: () -> Unit, remove: () -> Unit) {
-    InfoCard(place.name, PlaceCategory.valueOf(place.category).label + (tripLabel?.let { " · $it" } ?: ""), Icons.Default.Place, edit, remove) {
-        if (place.address.isNotBlank()) Text(place.address)
-        if (place.notes.isNotBlank()) Text(place.notes)
-        if (place.googlePlaceId != null) Text("Linked to Google Maps · view on the Map tab", style = MaterialTheme.typography.labelSmall)
     }
 }
 
