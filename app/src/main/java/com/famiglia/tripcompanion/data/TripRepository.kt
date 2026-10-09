@@ -2,6 +2,8 @@ package com.famiglia.tripcompanion.data
 
 import androidx.room.withTransaction
 import kotlinx.coroutines.flow.combine
+import com.famiglia.tripcompanion.planning.DayDraft
+import com.famiglia.tripcompanion.planning.DaySuggestions
 
 data class TravelData(
     val trips: List<Trip> = emptyList(),
@@ -71,6 +73,26 @@ class TripRepository(private val database: TripDatabase) {
             items.add(to, items.removeAt(from))
             items.forEachIndexed { index, item -> dao.update(item.copy(position = index)) }
         }
+    }
+
+    /** Revalidate snapshots and regenerate times inside the same transaction as all inserts. */
+    suspend fun saveSuggestion(draft: DayDraft): Long = database.withTransaction {
+        val request = draft.request
+        require(dao.trip(request.trip.id) == request.trip) { "The trip changed or was deleted. Regenerate the draft." }
+        request.places.forEach { require(dao.place(it.id) == it) { "A selected place changed or was deleted. Regenerate the draft." } }
+        request.reservations.forEach { require(dao.reservation(it.id) == it) { "A selected booking changed or was deleted. Regenerate the draft." } }
+        val checked = DaySuggestions.build(request, draft.order, draft.usedAi, draft.elapsedMs)
+        require(checked.stops == draft.stops) { "The draft schedule changed. Regenerate it." }
+        val existing = dao.planOn(request.trip.id, request.date)
+        require(existing == null || dao.activities(existing.id).isEmpty()) { "This day already has activities. Choose a new or empty day; existing plans are kept." }
+        val planId = existing?.id ?: dao.save(DayPlan(tripId = request.trip.id, date = request.date,
+            title = "A day to explore", notes = "Reviewed ${if (draft.usedAi) "AI-assisted" else "manual"} draft. Transfer buffer: ${request.transferMinutes} min; verify travel times and opening hours."))
+        checked.stops.forEachIndexed { index, stop ->
+            dao.insert(PlanActivity(planId = planId, title = stop.title, time = DaySuggestions.time(stop.start), position = index,
+                placeId = if (stop.isReservation) null else stop.sourceId,
+                notes = "Until ${DaySuggestions.time(stop.end)} · ${if (stop.isReservation) "Fixed booking" else "Planned visit"}"))
+        }
+        planId
     }
 
     suspend fun delete(trip: Trip) = dao.delete(trip)

@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.famiglia.tripcompanion.data.*
+import com.famiglia.tripcompanion.planning.*
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -125,6 +126,50 @@ class RepositoryTest {
         assertEquals(second, repository.data.first().plans.single().id)
         assertEquals("Castle", repository.data.first().activities.single().title)
         assertEquals(tripId, repository.data.first().trips.single().id)
+    }
+
+    private suspend fun suggestion(): DayDraft {
+        val tripId = repository.save(trip)
+        repository.save(Place(tripId = tripId, name = "Museum"))
+        repository.save(Place(tripId = tripId, name = "Garden"))
+        repository.save(Reservation(tripId = tripId, title = "Reserved lunch", date = trip.startDate, time = "12:00", endDate = trip.startDate, endTime = "13:00"))
+        val data = repository.data.first()
+        val request = DayRequest(data.trips.single(), trip.startDate, "09:00", "18:00", 45, 15, data.places, data.reservations)
+        return DaySuggestions.build(request, request.places.map { it.id }, true)
+    }
+
+    @Test fun suggestionSavesReviewedActivitiesIntoEmptyDayAndPreventsDuplicateSave() = runBlocking {
+        val draft = suggestion()
+        val existing = repository.save(DayPlan(tripId = draft.request.trip.id, date = draft.request.date, title = "Keep title", notes = "Keep notes"))
+        assertEquals(existing, repository.saveSuggestion(draft))
+        val stored = repository.data.first()
+        assertEquals("Keep notes", stored.plans.single().notes)
+        assertEquals(draft.stops.map { it.title }, stored.activities.map { it.title })
+        assertEquals(draft.stops.map { DaySuggestions.time(it.start) }, stored.activities.map { it.time })
+        try { repository.saveSuggestion(draft); fail("Duplicate save accepted") } catch (_: IllegalArgumentException) {}
+        assertEquals(3, repository.data.first().activities.size)
+    }
+
+    @Test fun changedBookingAndTamperedScheduleCannotPartiallySave() = runBlocking {
+        val draft = suggestion()
+        val booking = draft.request.reservations.single()
+        repository.save(booking.copy(time = "12:30"))
+        try { repository.saveSuggestion(draft); fail("Stale booking accepted") } catch (_: IllegalArgumentException) {}
+        assertTrue(repository.data.first().plans.isEmpty())
+        repository.save(booking)
+        val changed = draft.copy(stops = draft.stops.map { it.copy(end = it.end + 1) })
+        try { repository.saveSuggestion(changed); fail("Tampered times accepted") } catch (_: IllegalArgumentException) {}
+        assertTrue(repository.data.first().activities.isEmpty())
+        assertTrue(repository.data.first().plans.isEmpty())
+    }
+
+    @Test fun insertionFailureRollsBackWholeSuggestedDay() = runBlocking {
+        val draft = suggestion()
+        db.openHelper.writableDatabase.execSQL("CREATE TRIGGER reject_second BEFORE INSERT ON activities WHEN NEW.position=1 BEGIN SELECT RAISE(ABORT, 'forced rollback'); END")
+        try { repository.saveSuggestion(draft); fail("Fixture failed to reject second insertion") } catch (_: android.database.sqlite.SQLiteException) {}
+        assertTrue(repository.data.first().plans.isEmpty())
+        assertTrue(repository.data.first().activities.isEmpty())
+        assertEquals(2, repository.data.first().places.size)
     }
 
     @Test fun dataPersistsAcrossDatabaseCloseAndReopen() = runBlocking {
