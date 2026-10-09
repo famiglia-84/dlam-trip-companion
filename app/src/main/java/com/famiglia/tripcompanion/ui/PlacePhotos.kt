@@ -28,7 +28,7 @@ import com.famiglia.tripcompanion.maps.MapViewModel
 import com.famiglia.tripcompanion.maps.PlacePhoto
 import com.famiglia.tripcompanion.data.PlaceCategory
 
-/** No photo URI, author metadata or remote image is written to persistent caches. */
+/** Google photo URLs, author metadata and remote images are not written to persistent caches. */
 @Composable
 internal fun PlaceImage(localUri: String, photo: PlacePhoto?, name: String, modifier: Modifier, category: String = "") {
     val context = LocalContext.current

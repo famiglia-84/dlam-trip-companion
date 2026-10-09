@@ -181,6 +181,11 @@ class MapLayoutDeviceTest {
         val viewport = compose.onNodeWithTag("map-viewport").fetchSemanticsNode().boundsInRoot
         val root = compose.onNodeWithTag("map-layout").fetchSemanticsNode().boundsInRoot
         assertTrue("Short-window map collapsed: root=$root, map=$viewport", viewport.height > 40f)
+        compose.runOnIdle { fontScale = 1.5f }
+        compose.onNodeWithTag("map-save").assertIsDisplayed()
+        assertTrue("Save should retain a 48 dp target with large text in a short window",
+            compose.onNodeWithTag("map-save").fetchSemanticsNode().boundsInRoot.height >= 48f)
+        compose.runOnIdle { fontScale = 1f }
         compose.onNodeWithContentDescription("Map options").performClick()
         compose.onNodeWithText("Expand map").performClick()
         compose.onNodeWithTag("map-save").assertIsDisplayed()

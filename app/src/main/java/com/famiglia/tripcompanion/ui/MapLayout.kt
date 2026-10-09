@@ -130,7 +130,9 @@ internal fun MapLayout(
                 val resultsHeight = minOf(220.dp, maxHeight * 0.6f)
                 val compact = shortWindow || maxHeight < 400.dp
                 val peek = if (state.selected == null) 0.dp else minOf(maxHeight,
-                    if (compact) 148.dp else if (LocalDensity.current.fontScale > 1.3f) 220.dp else 188.dp)
+                    if (compact) {
+                        if (LocalDensity.current.fontScale > 1.3f) 184.dp else 148.dp
+                    } else if (LocalDensity.current.fontScale > 1.3f) 220.dp else 188.dp)
                 val sheetHeight = minOf(maxHeight, maxOf(peek, maxHeight * 0.75f))
                 val density = LocalDensity.current
                 val offset = runCatching { sheet.requireOffset() }.getOrNull()?.takeIf { it.isFinite() }
