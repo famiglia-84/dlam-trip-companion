@@ -27,8 +27,10 @@ jobs:
           log-accepted-android-sdk-licenses: 'false'
       - run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
       - uses: gradle/actions/setup-gradle@v5
+        with:
+          gradle-version: '8.13'
       - name: Build and lint the isolated diagnostic
-        run: ./tools/nano-check/gradlew -p tools/nano-check --no-daemon lintDebug assembleDebug
+        run: gradle -p tools/nano-check --no-daemon lintDebug assembleDebug
       - name: Verify signature and narrow permissions
         shell: bash
         run: |
@@ -61,7 +63,7 @@ jobs:
           profile: pixel_6
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: ./tools/nano-check/gradlew -p tools/nano-check --no-daemon connectedDebugAndroidTest
+          script: gradle -p tools/nano-check --no-daemon connectedDebugAndroidTest
       - name: Upload diagnostic APK
         uses: actions/upload-artifact@v5
         with:
