@@ -67,12 +67,13 @@ fun TravelApp(model: TravelViewModel) {
     var deletionId by rememberSaveable { mutableLongStateOf(0L) }
     var mapPlaceId by rememberSaveable { mutableStateOf<String?>(null) }
     var mapPlaceLabel by rememberSaveable { mutableStateOf("") }
+    var mapPlaceAddress by rememberSaveable { mutableStateOf("") }
     fun edit(kind: String, id: Long = 0, parent: Long = 0) {
-        editor = kind; editId = id; parentId = parent; mapPlaceId = null; mapPlaceLabel = ""
+        editor = kind; editId = id; parentId = parent; mapPlaceId = null; mapPlaceLabel = ""; mapPlaceAddress = ""
     }
-    fun saveMapPlace(id: String, label: String) {
+    fun saveMapPlace(id: String, label: String, address: String) {
         edit("place", parent = if (route == "trips") selected ?: 0 else 0)
-        mapPlaceId = id; mapPlaceLabel = label
+        mapPlaceId = id; mapPlaceLabel = label; mapPlaceAddress = address
     }
     fun remove(kind: String, id: Long) { deletion = kind; deletionId = id }
 
@@ -144,7 +145,7 @@ fun TravelApp(model: TravelViewModel) {
             when (editor) {
                 "trip" -> TripEditor(data.trips.firstOrNull { it.id == editId }, model, { id -> model.selectTrip(id) }, { editor = "" })
                 "reservation" -> data.trips.firstOrNull { it.id == parentId }?.let { trip -> ReservationEditor(data.reservations.firstOrNull { it.id == editId }, trip, model) { editor = "" } }
-                "place" -> PlaceEditor(data.places.firstOrNull { it.id == editId }, parentId.takeIf { it != 0L }, data.trips, model, mapPlaceId, mapPlaceLabel) { editor = "" }
+                "place" -> PlaceEditor(data.places.firstOrNull { it.id == editId }, parentId.takeIf { it != 0L }, data.trips, model, mapPlaceId, mapPlaceLabel, mapPlaceAddress) { editor = "" }
                 "day" -> data.trips.firstOrNull { it.id == parentId }?.let { trip -> DayEditor(data.plans.firstOrNull { it.id == editId }, trip, model) { editor = "" } }
                 "planner" -> data.trips.firstOrNull { it.id == parentId }?.let { trip ->
                     val planner: DayPlannerViewModel = viewModel()
@@ -238,7 +239,7 @@ private fun DestinationPhoto(trip: Trip, modifier: Modifier) {
 @Composable
 private fun TripDetails(trip: Trip, data: TravelData, section: String, sectionChange: (String) -> Unit, back: () -> Unit,
     edit: (String, Long, Long) -> Unit, remove: (String, Long) -> Unit, move: (PlanActivity, Int) -> Unit, modifier: Modifier,
-    maps: MapViewModel, saveMapPlace: (String, String) -> Unit) {
+    maps: MapViewModel, saveMapPlace: (String, String, String) -> Unit) {
     Column(modifier) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = back) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back to my trips") }

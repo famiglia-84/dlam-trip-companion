@@ -15,7 +15,7 @@ import com.google.maps.android.compose.*
 import kotlinx.coroutines.delay
 
 @Composable
-fun MapPane(model: MapViewModel, places: List<Place>, scopeId: Long?, save: (String, String) -> Unit, modifier: Modifier = Modifier) {
+fun MapPane(model: MapViewModel, places: List<Place>, scopeId: Long?, save: (String, String, String) -> Unit, modifier: Modifier = Modifier) {
     val state by model.state.collectAsStateWithLifecycle()
     val camera = rememberCameraPositionState()
     val focus = LocalFocusManager.current

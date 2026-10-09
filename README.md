@@ -55,7 +55,7 @@ The database has five related entities: `Trip`, `Reservation`, `Place`, `DayPlan
 
 The repository is the integration boundary. Future Gmail import or AI providers can return editable drafts and commit reviewed data through the same validation and persistence methods. The offline planner needs no API key. Embedded maps and place search optionally use Google Maps Platform with a restricted Android API key and billing; see [the setup guide](docs/GOOGLE_MAPS.md).
 
-Room version 2 adds a nullable Google place ID to saved places. Its explicit version-1 migration preserves existing travel records. Google map details remain in memory; only the place ID and your own labels/notes are persisted. Maps Compose 6.4.3 and Places SDK 4.4.1 are pinned to match the existing Kotlin/Compose toolchain. Search state cancels superseded requests and reports connection/configuration failures without displaying raw SDK errors.
+Room version 2 adds a nullable Google place ID to saved places. Its explicit version-1 migration preserves existing travel records. Version 0.4.1 prefills a selected place's name and address in the save dialog; confirming Save persists those editable fields and the place ID locally with your notes. Coordinates, search-result lists and provider attributions remain in memory. See the [Maps guide](docs/GOOGLE_MAPS.md) for provider-content storage considerations. Maps Compose 6.4.3 and Places SDK 4.4.1 remain pinned. Search state cancels superseded requests and reports connection/configuration failures without displaying raw SDK errors.
 
 ## Tests and device checks
 

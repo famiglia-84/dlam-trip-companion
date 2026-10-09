@@ -33,7 +33,7 @@ class MapLayoutDeviceTest {
     private val device get() = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
     private lateinit var model: MapViewModel
     private val lookup = FakePlaces()
-    private val saved = mutableListOf<Pair<String, String>>()
+    private val saved = mutableListOf<Triple<String, String, String>>()
     private var places by mutableStateOf<List<Place>>(emptyList())
     private var fontScale by mutableFloatStateOf(1f)
     @Volatile private var keyboardVisible = false
@@ -57,7 +57,7 @@ class MapLayoutDeviceTest {
                         topBar = { TopAppBar(title = { Text("Trip Companion") }) },
                         bottomBar = { NavigationBar { Text("My trips · Saved places · Map") } },
                     ) { padding ->
-                        MapLayout(model, places, null, { id, label -> saved += id to label }, Modifier.padding(padding).consumeWindowInsets(padding)) { modifier ->
+                        MapLayout(model, places, null, { id, label, address -> saved += Triple(id, label, address) }, Modifier.padding(padding).consumeWindowInsets(padding)) { modifier ->
                             Surface(modifier, color = MaterialTheme.colorScheme.secondaryContainer) { Text("Controlled map renderer") }
                         }
                     }
@@ -106,6 +106,11 @@ class MapLayoutDeviceTest {
         compose.onNodeWithTag("map-results").assertDoesNotExist()
         compose.onNodeWithTag("map-save").assertIsDisplayed()
         compose.onNodeWithTag("map-search").assertIsNotFocused()
+        val search = compose.onNodeWithTag("map-search").fetchSemanticsNode().boundsInRoot
+        val selectedControls = compose.onNodeWithTag("map-controls").fetchSemanticsNode().boundsInRoot
+        val savedAction = compose.onNodeWithTag("map-saved-places").fetchSemanticsNode().boundsInRoot
+        assertEquals(48f, search.height, 1f) // Fixture uses 160 dpi and the standard text scale.
+        assertEquals(selectedControls.center.x, savedAction.center.x, 1f)
         val root = compose.onNodeWithTag("map-layout").fetchSemanticsNode().boundsInRoot
         val map = compose.onNodeWithTag("map-viewport").fetchSemanticsNode().boundsInRoot
         val surround = compose.onNodeWithTag("map-card-surround").fetchSemanticsNode().boundsInRoot
@@ -114,9 +119,10 @@ class MapLayoutDeviceTest {
         assertEquals(map.bottom, surround.top, 1f)
         assertEquals(card.left - surround.left, card.top - surround.top, 1f)
         assertEquals(card.left - surround.left, surround.bottom - card.bottom, 1f)
+        assertEquals(card.center.x, compose.onNodeWithTag("map-save").fetchSemanticsNode().boundsInRoot.center.x, 1f)
         assertTrue(saved.isEmpty())
         compose.onNodeWithTag("map-save").performClick()
-        assertEquals(listOf("luz-id" to "Bari"), saved)
+        assertEquals(listOf(Triple("luz-id", "Luz", "Via Giuseppe Re David, 32, 70126 Bari BA, Italy")), saved)
         assertEquals(listOf("Bari"), lookup.searches)
     }
 
@@ -158,7 +164,7 @@ class MapLayoutDeviceTest {
         compose.runOnIdle { fontScale = 1.5f }
         compose.onNodeWithTag("map-save").assertIsDisplayed()
         compose.onNodeWithTag("map-save").performClick()
-        assertEquals(listOf("luz-id" to "Bari"), saved)
+        assertEquals(listOf(Triple("luz-id", "Luz", "Via Giuseppe Re David, 32, 70126 Bari BA, Italy")), saved)
         compose.runOnIdle { places = listOf(Place(name = "My Luz", googlePlaceId = "luz-id")) }
         compose.onNodeWithText("Saved as My Luz").assertIsDisplayed()
         compose.onNodeWithTag("map-save").assertDoesNotExist()
