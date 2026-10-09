@@ -104,8 +104,13 @@ class MapLayoutDeviceTest {
         val searchRoot = compose.onNodeWithTag("map-layout").fetchSemanticsNode().boundsInRoot
         val controls = compose.onNodeWithTag("map-controls").fetchSemanticsNode().boundsInRoot
         val searchMap = compose.onNodeWithTag("map-viewport").fetchSemanticsNode().boundsInRoot
-        assertEquals(searchRoot.height - controls.height, searchMap.height, 1f)
+        assertEquals(searchRoot.height - controls.height - 12f, searchMap.height, 1f)
         assertEquals(controls.bottom, searchMap.top, 1f)
+        val frame = compose.onNodeWithTag("map-frame").fetchSemanticsNode().boundsInRoot
+        val searchField = compose.onNodeWithTag("map-search").fetchSemanticsNode().boundsInRoot
+        assertEquals(searchField.left, frame.left, 1f)
+        assertEquals(searchField.right, frame.right, 1f)
+        assertEquals(12f, frame.left - searchRoot.left, 1f)
         compose.onNodeWithText("Luz restaurant").performClick()
         compose.onNodeWithTag("map-results").assertDoesNotExist()
         compose.onNodeWithTag("map-save").assertIsDisplayed()
@@ -121,7 +126,7 @@ class MapLayoutDeviceTest {
         val card = compose.onNodeWithTag("map-place-card").fetchSemanticsNode().boundsInRoot
         val safeMap = compose.onNodeWithTag("map-safe-content").fetchSemanticsNode().boundsInRoot
         assertTrue("Visible map should occupy most of the selected-place screen", safeMap.height > root.height * 0.5f)
-        assertEquals(safeMap.bottom, surround.top, 1f)
+        assertEquals(safeMap.bottom + 8f, surround.top, 1f)
         assertEquals(card.left - surround.left, card.top - surround.top, 1f)
         assertEquals(12f, root.bottom - map.bottom, 1f)
         assertEquals(card.center.x, compose.onNodeWithTag("map-save").fetchSemanticsNode().boundsInRoot.center.x, 1f)
@@ -159,8 +164,22 @@ class MapLayoutDeviceTest {
             swipe(Offset(center.x, 28f), Offset(center.x, -200f), durationMillis = 300)
         }
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("map-place-details").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("map-search").assertDoesNotExist()
+        compose.onAllNodesWithText("Luz").assertCountEquals(1)
+        compose.onAllNodesWithText("Via Giuseppe Re David, 32, 70126 Bari BA, Italy").assertCountEquals(1)
+        val root = compose.onNodeWithTag("map-layout").fetchSemanticsNode().boundsInRoot
+        val card = compose.onNodeWithTag("map-place-card").fetchSemanticsNode().boundsInRoot
+        assertEquals(root.top + 12f, card.top, 1f)
+        assertEquals(root.bottom - 12f, card.bottom, 1f)
+        val toolbar = compose.onNodeWithTag("place-details-toolbar").fetchSemanticsNode().boundsInRoot
+        assertTrue("Expanded toolbar should be slim", toolbar.height <= 80f)
         compose.onNodeWithText("★ 4.5 · 12 ratings").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Monday: 09:00–17:00").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Refresh details").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("place-detail-name").assertIsNotDisplayed()
+        compose.onNodeWithTag("place-detail-address").assertIsNotDisplayed()
+        compose.onNodeWithTag("map-save").assertIsDisplayed()
+        assertEquals(toolbar.top, compose.onNodeWithTag("place-details-toolbar").fetchSemanticsNode().boundsInRoot.top, 1f)
         assertEquals(listOf("luz-id"), lookup.richCalls)
         device.pressBack()
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("map-place-details").fetchSemanticsNodes().isEmpty() }
@@ -171,6 +190,11 @@ class MapLayoutDeviceTest {
         compose.onNodeWithTag("map-save").assertDoesNotExist()
         compose.onNodeWithTag("map-search").assertIsDisplayed()
         assertTrue(saved.isEmpty())
+        // Closing the expanded view must not leave the next place expanded automatically.
+        compose.runOnIdle { model.select("museum-id") }
+        compose.onNodeWithTag("map-save").assertIsDisplayed()
+        compose.onNodeWithTag("map-place-details").assertDoesNotExist()
+        compose.onNodeWithTag("map-search").assertIsDisplayed()
     }
 
     @Test fun shortAndWideWindowsKeepSaveUsableAndSavedPlacesDoNotOfferDuplicates() {
@@ -206,7 +230,8 @@ class MapLayoutDeviceTest {
         val richCalls = mutableListOf<String>()
         override suspend fun moreDetails(id: String): PlaceDetails {
             richCalls += id
-            return PlaceDetails(rating = 4.5, ratingCount = 12, openNow = true, hours = listOf("Monday: 09:00–17:00"))
+            return PlaceDetails(photos = listOf(PlacePhoto("content://com.famiglia.tripcompanion.test/preview")), rating = 4.5, ratingCount = 12, openNow = true,
+                hours = listOf("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday").map { "$it: 09:00–17:00" })
         }
         override suspend fun search(query: String): List<PlaceSuggestion> {
             searches += query

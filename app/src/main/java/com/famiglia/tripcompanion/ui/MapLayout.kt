@@ -24,6 +24,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalFocusManager
@@ -75,17 +76,21 @@ internal fun MapLayout(
         return
     }
 
-    val sheet = rememberStandardBottomSheetState(initialValue = SheetValue.PartiallyExpanded)
+    val sheet = key(state.selected != null) {
+        rememberStandardBottomSheetState(initialValue = SheetValue.PartiallyExpanded)
+    }
     val sheetScaffold = rememberBottomSheetScaffoldState(bottomSheetState = sheet)
     val scope = rememberCoroutineScope()
     val sheetExpanded = sheet.currentValue == SheetValue.Expanded || sheet.targetValue == SheetValue.Expanded
+    // Resize after the gesture settles so changing anchors cannot reverse a drag midway.
+    val detailsExpanded = state.selected != null && sheet.currentValue == SheetValue.Expanded
     BackHandler(enabled = state.selected != null && sheetExpanded) { scope.launch { sheet.partialExpand() } }
     LaunchedEffect(state.selected?.id, sheetExpanded) { if (sheetExpanded) model.loadDetails() }
 
     BoxWithConstraints(modifier.fillMaxSize().imePadding().testTag("map-layout")) {
         val shortWindow = maxHeight < 420.dp
         Column(Modifier.fillMaxSize()) {
-            if (!expandedMap) {
+            if (!expandedMap && !detailsExpanded) {
                 Column(Modifier.fillMaxWidth().testTag("map-controls").padding(horizontal = 12.dp, vertical = 8.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         MapSearchField(query, model::changeQuery, !state.busy, ::search, Modifier.weight(1f))
@@ -123,8 +128,8 @@ internal fun MapLayout(
                 }
             }
             val message = state.message ?: if (mapSlow) "The map has not loaded. Check your connection and Maps configuration, then reopen this screen." else null
-            if (message != null) Text(message, Modifier.padding(horizontal = 12.dp, vertical = 4.dp).testTag("map-message"), style = MaterialTheme.typography.bodySmall)
-            if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+            if (message != null && !detailsExpanded) Text(message, Modifier.padding(horizontal = 12.dp, vertical = 4.dp).testTag("map-message"), style = MaterialTheme.typography.bodySmall)
+            if (state.busy && !detailsExpanded) LinearProgressIndicator(Modifier.fillMaxWidth())
 
             BoxWithConstraints(Modifier.fillMaxWidth().weight(1f).testTag("map-viewport")) {
                 val resultsHeight = minOf(220.dp, maxHeight * 0.6f)
@@ -133,7 +138,7 @@ internal fun MapLayout(
                     if (compact) {
                         if (LocalDensity.current.fontScale > 1.3f) 184.dp else 148.dp
                     } else if (LocalDensity.current.fontScale > 1.3f) 220.dp else 188.dp)
-                val sheetHeight = minOf(maxHeight, maxOf(peek, maxHeight * 0.75f))
+                val sheetHeight = maxHeight
                 val density = LocalDensity.current
                 val offset = runCatching { sheet.requireOffset() }.getOrNull()?.takeIf { it.isFinite() }
                 val safeBottom = if (state.selected == null) 0.dp else with(density) {
@@ -144,15 +149,23 @@ internal fun MapLayout(
                     sheetSwipeEnabled = state.selected != null, sheetShadowElevation = 0.dp,
                     sheetContainerColor = MaterialTheme.colorScheme.background,
                     sheetContent = {
-                        state.selected?.let { selected ->
+                        key(state.selected?.id) { state.selected?.let { selected ->
                             MapPlaceSheet(selected, places.firstOrNull { it.googlePlaceId == selected.id }, model, state,
                                 peek, sheetHeight, compact, sheetExpanded,
                                 toggle = { scope.launch { if (sheetExpanded) sheet.partialExpand() else sheet.expand() } },
                                 save = { dismissKeyboard(); save(selected.id, selected.name.ifBlank { "Saved place" }, selected.address) })
-                        } ?: Spacer(Modifier.height(1.dp))
+                        } ?: Spacer(Modifier.height(1.dp)) }
                     },
-                ) { map(Modifier.fillMaxSize(), PaddingValues(bottom = safeBottom)) }
-                if (expandedMap) Surface(
+                ) {
+                    Surface(Modifier.fillMaxSize().padding(horizontal = 12.dp).testTag("map-frame"),
+                        shape = RoundedCornerShape(20.dp), border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.6f))) {
+                        // Keep SDK controls inset from the rounded edge; the opaque expanded sheet covers the map.
+                        val bottom = if (detailsExpanded && sheet.currentValue == SheetValue.Expanded) 8.dp
+                            else minOf(safeBottom + 8.dp, (maxHeight - 96.dp).coerceAtLeast(8.dp))
+                        map(Modifier.fillMaxSize().clip(RoundedCornerShape(20.dp)), PaddingValues(start = 8.dp, top = 8.dp, end = 8.dp, bottom = bottom))
+                    }
+                }
+                if (expandedMap && !detailsExpanded) Surface(
                     modifier = Modifier.align(Alignment.TopEnd).padding(12.dp), shape = RoundedCornerShape(28.dp),
                     color = MaterialTheme.colorScheme.surface,
                 ) {
@@ -182,8 +195,8 @@ internal fun MapLayout(
                     }
                 }
             }
-            if (state.selected != null) Spacer(Modifier.fillMaxWidth().height(12.dp))
-            PlaceAttributions((state.pins + listOfNotNull(state.selected)).flatMap(MapLocation::attributions).distinct())
+            Spacer(Modifier.fillMaxWidth().height(12.dp))
+            if (!detailsExpanded) PlaceAttributions((state.pins + listOfNotNull(state.selected)).flatMap(MapLocation::attributions).distinct())
         }
     }
     if (showInfo) MapInformation { showInfo = false }
