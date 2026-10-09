@@ -77,6 +77,26 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: ./gradlew --no-daemon connectedDebugAndroidTest
+      - name: Verify final APK and report public signing certificate
+        env:
+          GOOGLE_MAPS_API_KEY: ${{ github.event_name != 'pull_request' && secrets.GOOGLE_MAPS_API_KEY || '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk=app/build/outputs/apk/debug/app-debug.apk
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs "$apk"
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$apk" > "$RUNNER_TEMP/trip-apk-package.txt"
+          head -n 1 "$RUNNER_TEMP/trip-apk-package.txt"
+          if [[ -n "${TRIP_KEYSTORE_PATH:-}" ]]; then
+            echo 'Personal signing configured for this trusted build.'
+          else
+            echo 'Disposable debug signing; this certificate can change between builds.'
+          fi
+          if [[ -n "$GOOGLE_MAPS_API_KEY" ]]; then
+            echo 'Google Maps API key supplied to this trusted build; its value is not logged.'
+          else
+            echo 'Keyless build; live Maps and Places lookup are unavailable.'
+          fi
       - name: Upload installable APK
         uses: actions/upload-artifact@v5
         with:
