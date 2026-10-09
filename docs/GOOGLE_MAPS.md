@@ -1,6 +1,6 @@
 # Google Maps and place search
 
-Version 0.5.1 gives the expanded place card the full content area between the app header and bottom navigation, with a slim fixed row for collapse/close and Save for unsaved places. The name, category, address and saved status appear once in its scrollable content, so they move away as you browse photos and hours. Search controls and the remaining map strip are covered in expanded mode; collapsing restores the compact card and useful map view. Closing resets the next selection to its compact view.
+Version 0.5.1 gives the expanded place card the full content area between the app header and bottom navigation, with a slim fixed row for Google attribution, collapse/close and Save for unsaved places. Save uses a labelled button where space permits and a bookmark icon on narrow windows. The name, category, address and saved status appear once in its scrollable content, so they move away as you browse photos and hours. Search controls and the remaining map strip are covered in expanded mode; collapsing restores the compact card and useful map view. Closing resets the next selection to its compact view.
 
 The map is framed by 12 dp background margins on the sides and bottom, with 20 dp rounded corners and a subtle outline. SDK content padding keeps the Google logo and zoom controls inset from rounded edges and above the collapsed card. The existing Maps configuration, schema 3 and saved travel records are unchanged.
 

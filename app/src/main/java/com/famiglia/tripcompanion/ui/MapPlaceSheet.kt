@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -16,8 +17,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -33,10 +36,24 @@ internal fun MapPlaceSheet(selected: MapLocation, saved: Place?, model: MapViewM
             Column(Modifier.fillMaxSize()) {
                 if (expanded) Column(Modifier.fillMaxWidth().testTag("place-details-toolbar").padding(horizontal = 12.dp, vertical = 4.dp)) {
                     SheetHandle()
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        if (saved == null) PlaceSaveButton(state.busy, save, "Save")
-                        Spacer(Modifier.weight(1f))
-                        PlaceSheetControls(true, toggle, model::dismissSelection)
+                    BoxWithConstraints(Modifier.fillMaxWidth()) {
+                        val compactSave = maxWidth < 320.dp
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                                Surface(color = Color.White, shape = RoundedCornerShape(4.dp)) {
+                                    Image(painterResource(com.google.android.libraries.places.R.drawable.google_maps_attribution_image),
+                                        "Google Maps", Modifier.padding(4.dp).height(18.dp))
+                                }
+                            }
+                            if (saved == null) {
+                                Spacer(Modifier.width(8.dp))
+                                if (compactSave) FilledIconButton(onClick = save, enabled = !state.busy,
+                                    modifier = Modifier.testTag("map-save"), shape = RoundedCornerShape(12.dp)) {
+                                    Icon(Icons.Default.BookmarkBorder, "Save place")
+                                } else PlaceSaveButton(state.busy, save, "Save")
+                            }
+                            PlaceSheetControls(true, toggle, model::dismissSelection)
+                        }
                     }
                 } else Column(Modifier.fillMaxWidth().height(peek - 12.dp).padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     SheetHandle()

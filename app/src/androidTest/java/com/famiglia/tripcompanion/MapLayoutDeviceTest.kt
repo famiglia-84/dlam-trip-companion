@@ -173,6 +173,7 @@ class MapLayoutDeviceTest {
         assertEquals(root.bottom - 12f, card.bottom, 1f)
         val toolbar = compose.onNodeWithTag("place-details-toolbar").fetchSemanticsNode().boundsInRoot
         assertTrue("Expanded toolbar should be slim", toolbar.height <= 80f)
+        compose.onNodeWithContentDescription("Google Maps").assertIsDisplayed()
         compose.onNodeWithText("★ 4.5 · 12 ratings").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Monday: 09:00–17:00").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Refresh details").performScrollTo().assertIsDisplayed()
