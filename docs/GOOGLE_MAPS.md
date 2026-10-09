@@ -1,5 +1,7 @@
 # Google Maps and place search
 
+Version 0.3.1 also lets you tap a named point of interest directly on the map, such as a restaurant, shop or attraction, without another search. Its name/address load in the selection card; choose **Save place link**, enter your own label and confirm in the place editor. Tapping alone never saves a record. An unrelated previous search is not reused as the new place's label. Blank map areas are not selectable places; zoom in to reveal more named locations. This uses the existing Places API, with no additional Google service required.
+
 Trip Companion 0.2 adds a Google Map in the main navigation and a Map tab inside each trip. Search for a place, address or city, select a result to see its location, then choose **Save place link**. Give it your own label, category and optional private notes. A trip's map shows its assigned places; the main map can show all linked saved places.
 
 **Show saved places** fetches current map details for up to 50 distinct Google place IDs. Manually entered places have no coordinates: search for them and save a linked place first. Requests are explicit; typing alone does not search, and opening a map does not automatically look up all saved places. A request can incur Google Maps Platform charges. Place search uses an autocomplete session token and a limited details field mask.

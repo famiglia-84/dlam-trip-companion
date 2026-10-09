@@ -14,6 +14,7 @@ import kotlinx.coroutines.launch
 data class MapSearchState(
     val suggestions: List<PlaceSuggestion> = emptyList(),
     val selected: MapLocation? = null,
+    val saveLabel: String = "",
     val pins: List<MapLocation> = emptyList(),
     val busy: Boolean = false,
     val message: String? = null,
@@ -60,13 +61,14 @@ class MapViewModel(
     }
 
     fun select(id: String, fromSearch: Boolean = false) {
+        val saveLabel = if (fromSearch) query.value else ""
         val loaded = if (fromSearch) null else (_state.value.pins + listOfNotNull(_state.value.selected)).firstOrNull { it.id == id }
         if (loaded != null) {
             request?.cancel()
-            _state.value = _state.value.copy(selected = loaded, suggestions = emptyList(), busy = false, message = null)
+            _state.value = _state.value.copy(selected = loaded, saveLabel = saveLabel, suggestions = emptyList(), busy = false, message = null)
         } else execute {
             val location = it.details(id, fromSearch)
-            _state.value = _state.value.copy(selected = location, suggestions = emptyList())
+            _state.value = _state.value.copy(selected = location, saveLabel = saveLabel, suggestions = emptyList())
         }
     }
 
