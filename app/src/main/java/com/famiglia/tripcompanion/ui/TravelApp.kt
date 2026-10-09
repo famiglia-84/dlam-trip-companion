@@ -39,6 +39,7 @@ import androidx.navigation.compose.rememberNavController
 import coil.compose.AsyncImage
 import com.famiglia.tripcompanion.data.*
 import com.famiglia.tripcompanion.maps.MapViewModel
+import com.famiglia.tripcompanion.planning.DayPlannerViewModel
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -141,6 +142,10 @@ fun TravelApp(model: TravelViewModel) {
                 "reservation" -> data.trips.firstOrNull { it.id == parentId }?.let { trip -> ReservationEditor(data.reservations.firstOrNull { it.id == editId }, trip, model) { editor = "" } }
                 "place" -> PlaceEditor(data.places.firstOrNull { it.id == editId }, parentId.takeIf { it != 0L }, data.trips, model, mapPlaceId, mapPlaceLabel) { editor = "" }
                 "day" -> data.trips.firstOrNull { it.id == parentId }?.let { trip -> DayEditor(data.plans.firstOrNull { it.id == editId }, trip, model) { editor = "" } }
+                "planner" -> data.trips.firstOrNull { it.id == parentId }?.let { trip ->
+                    val planner: DayPlannerViewModel = viewModel()
+                    DayPlannerPane(trip, data, planner) { editor = ""; model.selectSection("Day plans") }
+                }
                 "activity" -> data.plans.firstOrNull { it.id == parentId }?.let { plan ->
                     ActivityEditor(data.activities.firstOrNull { it.id == editId }, plan, data.places.filter { it.tripId == null || it.tripId == plan.tripId }, model) { editor = "" }
                 }
@@ -272,6 +277,7 @@ private fun TripDetails(trip: Trip, data: TravelData, section: String, sectionCh
                 "Day plans" -> {
                     val days = data.plans.filter { it.tripId == trip.id }
                     item { SectionHeading("Make room for discovery", "Add day plan") { edit("day", 0, trip.id) } }
+                    item { OutlinedButton(onClick = { edit("planner", 0, trip.id) }, modifier = Modifier.fillMaxWidth()) { Text("Suggest a day plan") } }
                     if (days.isEmpty()) item { InlineEmpty("A day at a time.", "Create a plan, then add activities or your saved places. Everything is kept offline.") }
                     items(days, key = { "day-${it.id}" }) { plan ->
                         val activities = data.activities.filter { it.planId == plan.id }

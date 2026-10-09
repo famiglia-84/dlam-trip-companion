@@ -25,6 +25,7 @@ interface TripDao {
     @Query("SELECT * FROM day_plans WHERE tripId = :tripId AND date = :date") suspend fun planOn(tripId: Long, date: String): DayPlan?
     @Query("SELECT * FROM activities WHERE planId = :planId ORDER BY position, id") suspend fun activities(planId: Long): List<PlanActivity>
     @Query("SELECT * FROM places WHERE id = :id") suspend fun place(id: Long): Place?
+    @Query("SELECT * FROM reservations WHERE id = :id") suspend fun reservation(id: Long): Reservation?
     @Upsert suspend fun save(trip: Trip): Long
     @Upsert suspend fun save(reservation: Reservation): Long
     @Upsert suspend fun save(place: Place): Long

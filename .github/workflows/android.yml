@@ -31,6 +31,8 @@ jobs:
       - name: Install pinned SDK components
         run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
       - uses: gradle/actions/setup-gradle@v5
+        with:
+          gradle-version: '8.13'
       # PR builds use a disposable debug key. Stable personal signing is opt-in
       # for trusted main/manual builds only, never exposed to a pull request.
       - name: Prepare optional personal signing key
@@ -55,7 +57,7 @@ jobs:
           TRIP_STORE_PASSWORD: ${{ github.event_name != 'pull_request' && secrets.TRIP_STORE_PASSWORD || '' }}
           TRIP_KEY_ALIAS: ${{ github.event_name != 'pull_request' && secrets.TRIP_KEY_ALIAS || '' }}
           TRIP_KEY_PASSWORD: ${{ github.event_name != 'pull_request' && secrets.TRIP_KEY_PASSWORD || '' }}
-        run: ./gradlew --no-daemon testDebugUnitTest lintDebug assembleDebug
+        run: gradle --no-daemon testDebugUnitTest lintDebug assembleDebug
       - name: Enable KVM for the dedicated test emulator
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -76,7 +78,7 @@ jobs:
           profile: pixel_6
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: ./gradlew --no-daemon connectedDebugAndroidTest
+          script: gradle --no-daemon connectedDebugAndroidTest
       - name: Verify final APK and report public signing certificate
         env:
           GOOGLE_MAPS_API_KEY: ${{ github.event_name != 'pull_request' && secrets.GOOGLE_MAPS_API_KEY || '' }}

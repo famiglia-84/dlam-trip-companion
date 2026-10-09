@@ -32,7 +32,7 @@ For a first contribution to an empty repository, `main` contains a minimal basel
 
 ## Cloud toolchain and build
 
-The pinned stack is Kotlin 2.1.20, Compose BOM 2025.04.01 / Material 3, Android Gradle Plugin 8.10.1, Gradle 8.11.1, Room 2.7.1, Navigation Compose 2.8.9, Lifecycle 2.9.0, Coroutines 1.10.2 and Coil 2.7.0. JVM bytecode targets Java 17 and builds run on JDK 21. CI installs Android SDK 36 and build-tools 36.0.0.
+The pinned stack is Kotlin/Compose compiler 2.3.21, Compose BOM 2025.04.01 / Material 3, Android Gradle Plugin 8.13.2, Gradle 8.13, Room 2.8.4, Navigation Compose 2.8.9, Lifecycle 2.9.0, Coroutines 1.10.2 and Coil 2.7.0. JVM bytecode targets Java 17 and builds run on JDK 21. CI installs Android SDK 36 and build-tools 36.0.0. [AI-assisted day planning](docs/AI_DAY_PLANNING.md) uses ML Kit Prompt 1.0.0-beta4 through Android AICore, with local suggestions, strict scheduling, review before saving and a manual fallback.
 
 In this Codex cloud environment, use the existing checkout (each task is already isolated; no additional worktree is needed):
 
@@ -84,7 +84,7 @@ The workflow decodes the key into a temporary runner file, signs the debug APK a
 
 ## Limits and next phases
 
-Google Maps and place search are optional online features introduced in version 0.2. There is no Gmail access, AI planning, account login or remote synchronization. Photos are selected manually; the supplied mountain illustration is original fallback artwork. No third-party destination photos are bundled. Times do not encode time zones, and confirmations are manually entered. Activities are reordered with buttons rather than drag-and-drop.
+Google Maps and place search are optional online features introduced in version 0.2; version 0.3 adds optional on-device AI-assisted day planning. There is no Gmail access, account login or remote synchronization. Photos are selected manually; the supplied mountain illustration is original fallback artwork. No third-party destination photos are bundled. Times do not encode time zones, and confirmations are manually entered. Activities are reordered with buttons rather than drag-and-drop.
 
 Android application sandboxing protects the local database, but it is not separately encrypted. Cloud backup is disabled because bookings and notes may contain personal information. Clearing app storage or uninstalling deletes travel data. A device hinge is not explicitly mapped; adaptation follows available window width. Actual handset behavior and installation must be checked on the device.
 
