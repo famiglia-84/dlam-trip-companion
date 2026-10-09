@@ -160,10 +160,14 @@ class MapLayoutDeviceTest {
     @Test fun draggingTheSheetLoadsDetailsOnceAndBackAndCloseKeepMapUsable() {
         selectPlace()
         assertTrue(lookup.richCalls.isEmpty())
+        val viewportBeforeDrag = compose.onNodeWithTag("map-viewport").fetchSemanticsNode().boundsInRoot
+        val sheetBeforeDrag = compose.onNodeWithTag("map-card-surround").fetchSemanticsNode().boundsInRoot
         compose.onNodeWithTag("map-card-surround").performTouchInput {
-            swipe(Offset(center.x, 28f), Offset(center.x, -200f), durationMillis = 300)
+            // Drag to the map's top: full-height expansion travels farther than the previous 75% sheet.
+            swipe(Offset(center.x, 28f), Offset(center.x, viewportBeforeDrag.top + 24f - sheetBeforeDrag.top), durationMillis = 500)
         }
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("map-place-details").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("map-controls").fetchSemanticsNodes().isEmpty() }
         compose.onNodeWithTag("map-search").assertDoesNotExist()
         compose.onAllNodesWithText("Luz").assertCountEquals(1)
         compose.onAllNodesWithText("Via Giuseppe Re David, 32, 70126 Bari BA, Italy").assertCountEquals(1)

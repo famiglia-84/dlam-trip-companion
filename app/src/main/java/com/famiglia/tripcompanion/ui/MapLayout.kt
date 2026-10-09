@@ -82,8 +82,8 @@ internal fun MapLayout(
     val sheetScaffold = rememberBottomSheetScaffoldState(bottomSheetState = sheet)
     val scope = rememberCoroutineScope()
     val sheetExpanded = sheet.currentValue == SheetValue.Expanded || sheet.targetValue == SheetValue.Expanded
-    // Resize after the gesture settles so changing anchors cannot reverse a drag midway.
-    val detailsExpanded = state.selected != null && sheet.currentValue == SheetValue.Expanded
+    // currentValue can change while dragging; resize only once an anchor is physically reached.
+    var detailsExpanded by remember(sheet) { mutableStateOf(false) }
     BackHandler(enabled = state.selected != null && sheetExpanded) { scope.launch { sheet.partialExpand() } }
     LaunchedEffect(state.selected?.id, sheetExpanded) { if (sheetExpanded) model.loadDetails() }
 
@@ -141,6 +141,15 @@ internal fun MapLayout(
                 val sheetHeight = maxHeight
                 val density = LocalDensity.current
                 val offset = runCatching { sheet.requireOffset() }.getOrNull()?.takeIf { it.isFinite() }
+                val reachedTop = state.selected != null && sheet.currentValue == SheetValue.Expanded &&
+                    sheet.targetValue == SheetValue.Expanded && offset != null && offset <= 1f
+                val reachedPeek = sheet.currentValue == SheetValue.PartiallyExpanded &&
+                    sheet.targetValue == SheetValue.PartiallyExpanded && offset != null &&
+                    kotlin.math.abs(offset - with(density) { (maxHeight - peek).toPx() }) <= 1f
+                LaunchedEffect(reachedTop, reachedPeek) {
+                    if (reachedTop) detailsExpanded = true
+                    else if (reachedPeek) detailsExpanded = false
+                }
                 val safeBottom = if (state.selected == null) 0.dp else with(density) {
                     (maxHeight.toPx() - (offset ?: (maxHeight - peek).toPx())).coerceIn(0f, maxHeight.toPx()).toDp()
                 }
