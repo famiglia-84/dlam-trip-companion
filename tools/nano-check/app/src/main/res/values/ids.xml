@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <item name="check" type="id" />
+    <item name="copy" type="id" />
+    <item name="report" type="id" />
+    <item name="download" type="id" />
+    <item name="generate" type="id" />
+    <item name="cancel" type="id" />
+</resources>

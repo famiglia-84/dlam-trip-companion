@@ -1,0 +1,83 @@
+name: On-device AI compatibility check
+
+on:
+  pull_request:
+    paths:
+      - 'tools/nano-check/**'
+      - '.github/workflows/nano-check.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: '13114758'
+          packages: 'platform-tools'
+          log-accepted-android-sdk-licenses: 'false'
+      - run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+      - uses: gradle/actions/setup-gradle@v5
+        with:
+          gradle-version: '8.13'
+      - name: Build and lint the isolated diagnostic
+        run: gradle -p tools/nano-check --no-daemon lintDebug assembleDebug
+      - name: Verify signature and narrow permissions
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk=tools/nano-check/app/build/outputs/apk/debug/app-debug.apk
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose "$apk"
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump permissions "$apk" > /tmp/nano-permissions.txt
+          cat /tmp/nano-permissions.txt
+          if grep -Eq 'android.permission.(INTERNET|ACCESS_WIFI_STATE|ACCESS_FINE_LOCATION|ACCESS_COARSE_LOCATION|READ_|WRITE_|CAMERA|RECORD_AUDIO)' /tmp/nano-permissions.txt; then
+            echo 'Unexpected permission in diagnostic APK.'
+            exit 1
+          fi
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$apk" > /tmp/nano-package.txt
+          grep -q "name='com.famiglia.tripcompanion.nanocheck'" /tmp/nano-package.txt
+          if grep -q 'application-debuggable' /tmp/nano-package.txt; then
+            echo 'Diagnostic APK should have debugging disabled.'
+            exit 1
+          fi
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Check SDK readiness and download-generation UI flows
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: gradle -p tools/nano-check --no-daemon connectedDebugAndroidTest
+      - name: Upload diagnostic APK
+        uses: actions/upload-artifact@v5
+        with:
+          name: trip-companion-ai-check-${{ github.run_number }}
+          path: tools/nano-check/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload lint report
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: ai-check-lint-${{ github.run_number }}
+          path: |
+            tools/nano-check/app/build/reports/lint-results-debug.html
+            tools/nano-check/app/build/reports/androidTests/connected/
+            tools/nano-check/app/build/outputs/androidTest-results/connected/
+          if-no-files-found: warn
