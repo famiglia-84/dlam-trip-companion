@@ -57,4 +57,13 @@ class TravelUiTest {
         assertEquals(8L, state.get<Long>("selectedTrip"))
         assertEquals("Saved places", state.get<String>("section"))
     }
+
+    @Test fun mapsWithoutAKeyShowSetupStateAndKeepOfflineNavigationUsable() {
+        org.junit.Assume.assumeTrue(compose.activity.getString(R.string.google_maps_key).isBlank())
+        compose.onNodeWithText("Map").performClick()
+        compose.onNodeWithTag("maps-unconfigured").assertIsDisplayed()
+        compose.onNodeWithTag("google-map").assertDoesNotExist()
+        compose.onNodeWithText("My trips").performClick()
+        compose.onNodeWithText("New trip").assertIsDisplayed()
+    }
 }

@@ -16,3 +16,13 @@ Four native editor/window tests are configured for the GitHub Actions API 35 emu
 The editor tests originally ran under Robolectric. An isolated Material dialog with a single text field also failed to become idle, including with native graphics, a newer simulated SDK and Robolectric 4.17. The real editor assertions were moved to Android instrumentation tests rather than removed or weakened. GitHub Actions runs them in a dedicated emulator before uploading the APK; a successful run is required for the downloadable artifact.
 
 No physical Samsung device testing has been performed. The emulator checks exercise Android behavior and resizing but cannot certify a physical folding hinge, Samsung firmware, photo-provider behavior or APK installation on the handset. Run the device checklist in the README before relying on personal travel data.
+
+## Google Maps integration, version 0.2
+
+The same complete cloud command passed after adding Maps Compose 6.4.3 and Places SDK 4.4.1. All **23 local tests passed**, with no skipped tests: four validation, nine repository, six Maps search/state, one database migration, and three Compose layout/navigation tests. The migration test creates the actual exported version-1 schema, inserts records in all five tables, upgrades it through Room's version-2 migration, and checks retained booking codes, notes, relationships and the new nullable place ID. Maps tests use a fake lookup provider to check explicit searches, request cancellation, session completion flags, scope restoration, ID-only lookups, partial failure, and missing configuration. No live Google requests are made by these tests.
+
+Android lint, app APK assembly and instrumentation APK assembly pass. Lint retains its Kapt performance warning. Places transitively includes Glide's unused `NotificationTarget`; `app/lint.xml` suppresses only the `NotificationPermission` report naming that specific dependency class. The application posts no notifications and receives no notification permission.
+
+APK signature verification succeeds. The actual built APK requests internet, network state and Wi-Fi state, plus AndroidX's app-specific signature permission. Coarse/fine location permissions introduced by dependencies are explicitly removed from the merged manifest. Version 0.2.0 uses version code 2 and remains a debug/testing build.
+
+No Google API key was supplied. Live map rendering, Google billing/authentication, real search results, rejected-key behaviour and physical Samsung testing remain unverified. Follow [the restricted-key setup and live-device checklist](GOOGLE_MAPS.md) before relying on these online features. The offline planner and keyless Map setup screen are covered by cloud tests.

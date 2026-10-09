@@ -14,6 +14,7 @@ All development, compilation and automated testing can happen in Codex cloud and
 - System, light and dark themes. Tap the appearance icon to cycle through them.
 - Single-column phone layout, two-column trip cards on medium windows, and a trip-list/detail layout with a navigation rail at 840dp and above. Selection, section and open form drafts survive activity recreation and window changes.
 - A cloud workflow that tests, lints, builds and uploads a debug APK.
+- Optional embedded Google Maps and place search. Save Google place links and view linked places on a trip map or the global map. See [Google Maps setup and privacy](docs/GOOGLE_MAPS.md).
 
 Trip deletion removes its bookings and day plans, but keeps saved places as unassigned. Deleting a place keeps existing activities and their copied notes. Deleting a day removes its activities. Deletions require confirmation. Trip-date changes that would leave an existing day plan outside the new dates are rejected: move or delete that plan first.
 
@@ -52,7 +53,9 @@ GitHub Actions uses its standard Java/Android/Gradle setup actions and does not 
 
 The database has five related entities: `Trip`, `Reservation`, `Place`, `DayPlan` and `PlanActivity`. Foreign keys enforce ownership and deletion rules, a unique trip/date index prevents duplicate day plans, and transactional repository operations protect date changes and activity ordering. ISO dates and local 24-hour times are stored directly; no time-zone conversion is applied. Validation errors keep the editing form open. Version 1 exports its Room schema; later schema changes must introduce tested migrations, never destructive fallback.
 
-The repository is the integration boundary. Future Gmail import, map/place lookup or AI providers can return editable drafts and commit reviewed data through the same validation and persistence methods. No API key or paid service is required for this version.
+The repository is the integration boundary. Future Gmail import or AI providers can return editable drafts and commit reviewed data through the same validation and persistence methods. The offline planner needs no API key. Embedded maps and place search optionally use Google Maps Platform with a restricted Android API key and billing; see [the setup guide](docs/GOOGLE_MAPS.md).
+
+Room version 2 adds a nullable Google place ID to saved places. Its explicit version-1 migration preserves existing travel records. Google map details remain in memory; only the place ID and your own labels/notes are persisted. Maps Compose 6.4.3 and Places SDK 4.4.1 are pinned to match the existing Kotlin/Compose toolchain. Search state cancels superseded requests and reports connection/configuration failures without displaying raw SDK errors.
 
 ## Tests and device checks
 
@@ -81,8 +84,8 @@ The workflow decodes the key into a temporary runner file, signs the debug APK a
 
 ## Limits and next phases
 
-There are no maps, place discovery, Gmail access, AI planning, accounts or remote synchronization in Phase 1. Photos are selected manually; the supplied mountain illustration is original fallback artwork. No third-party destination photos are bundled. Times do not encode time zones, and confirmations are manually entered. Activities are reordered with buttons rather than drag-and-drop.
+Google Maps and place search are optional online features introduced in version 0.2. There is no Gmail access, AI planning, account login or remote synchronization. Photos are selected manually; the supplied mountain illustration is original fallback artwork. No third-party destination photos are bundled. Times do not encode time zones, and confirmations are manually entered. Activities are reordered with buttons rather than drag-and-drop.
 
 Android application sandboxing protects the local database, but it is not separately encrypted. Cloud backup is disabled because bookings and notes may contain personal information. Clearing app storage or uninstalling deletes travel data. A device hinge is not explicitly mapped; adaptation follows available window width. Actual handset behavior and installation must be checked on the device.
 
-Phase 2 covers maps, place discovery, routes, richer imagery and offline improvements. Phase 3 covers optional AI planning and securely consented Gmail importing. Both follow a stable, tested Phase 1.
+Further Phase 2 work includes routes, richer imagery and offline improvements. Phase 3 covers optional AI planning and securely consented Gmail importing.

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<lint>
+    <!-- Places brings Glide, but this app never uses its NotificationTarget or
+         posts notifications. Ignore only that unused dependency class report;
+         keep NotificationPermission enabled for application code. -->
+    <issue id="NotificationPermission">
+        <ignore regexp="usage from com\.bumptech\.glide\.request\.target\.NotificationTarget" />
+    </issue>
+</lint>

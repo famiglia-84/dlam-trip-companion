@@ -6,6 +6,9 @@ import com.famiglia.tripcompanion.data.TripDatabase
 import com.famiglia.tripcompanion.data.TripRepository
 
 class TripApplication : Application() {
-    val database by lazy { Room.databaseBuilder(this, TripDatabase::class.java, "trip-companion.db").build() }
+    val database by lazy {
+        Room.databaseBuilder(this, TripDatabase::class.java, "trip-companion.db")
+            .addMigrations(TripDatabase.MIGRATION_1_2).build()
+    }
     val repository by lazy { TripRepository(database) }
 }

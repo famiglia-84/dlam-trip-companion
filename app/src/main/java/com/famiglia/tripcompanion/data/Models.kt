@@ -57,6 +57,7 @@ data class Place(
     val category: String = PlaceCategory.ATTRACTION.name,
     val address: String = "",
     val notes: String = "",
+    val googlePlaceId: String? = null,
 )
 
 @Entity(

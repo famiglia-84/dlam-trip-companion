@@ -8,6 +8,8 @@ import androidx.room.Query
 import androidx.room.RoomDatabase
 import androidx.room.Update
 import androidx.room.Upsert
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -36,7 +38,15 @@ interface TripDao {
     @Delete suspend fun delete(activity: PlanActivity)
 }
 
-@Database(entities = [Trip::class, Reservation::class, Place::class, DayPlan::class, PlanActivity::class], version = 1, exportSchema = true)
+@Database(entities = [Trip::class, Reservation::class, Place::class, DayPlan::class, PlanActivity::class], version = 2, exportSchema = true)
 abstract class TripDatabase : RoomDatabase() {
     abstract fun dao(): TripDao
+
+    companion object {
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE places ADD COLUMN googlePlaceId TEXT")
+            }
+        }
+    }
 }

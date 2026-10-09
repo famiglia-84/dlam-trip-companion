@@ -148,15 +148,17 @@ fun ReservationEditor(existing: Reservation?, trip: Trip, model: TravelViewModel
 }
 
 @Composable
-fun PlaceEditor(existing: Place?, defaultTripId: Long?, trips: List<Trip>, model: TravelViewModel, onDismiss: () -> Unit) {
-    var name by rememberSaveable { mutableStateOf(existing?.name ?: "") }
+fun PlaceEditor(existing: Place?, defaultTripId: Long?, trips: List<Trip>, model: TravelViewModel,
+    suggestedGoogleId: String? = null, suggestedName: String = "", onDismiss: () -> Unit) {
+    var name by rememberSaveable { mutableStateOf(existing?.name ?: suggestedName) }
+    var googleId by rememberSaveable { mutableStateOf(existing?.googlePlaceId ?: suggestedGoogleId) }
     var category by rememberSaveable { mutableStateOf(existing?.category ?: PlaceCategory.ATTRACTION.name) }
     var tripId by rememberSaveable { mutableStateOf(existing?.tripId ?: defaultTripId) }
     var address by rememberSaveable { mutableStateOf(existing?.address ?: "") }
     var notes by rememberSaveable { mutableStateOf(existing?.notes ?: "") }
     val options = listOf("All trips / unassigned") + trips.map { "${it.destination} · ${it.startDate} (#${it.id})" }
     Editor(if (existing == null) "Save a place" else "Edit saved place", onDismiss, {
-        model.save(Place(existing?.id ?: 0, tripId, name, category, address, notes))
+        model.save(Place(existing?.id ?: 0, tripId, name, category, address, notes, googleId))
     }) {
         Field("Place name", name, { name = it })
         Choices("Category", PlaceCategory.valueOf(category).label, PlaceCategory.entries.map { it.label }) { chosen -> category = PlaceCategory.entries.first { it.label == chosen }.name }
@@ -165,6 +167,10 @@ fun PlaceEditor(existing: Place?, defaultTripId: Long?, trips: List<Trip>, model
         }
         Field("Address", address, { address = it })
         Field("Notes", notes, { notes = it }, true)
+        if (googleId != null) {
+            Text("Google Maps link attached. Your label, address and notes stay on your device; map details load online.", style = MaterialTheme.typography.bodySmall)
+            TextButton(onClick = { googleId = null }) { Text("Remove Google Maps link") }
+        }
     }
 }
 
