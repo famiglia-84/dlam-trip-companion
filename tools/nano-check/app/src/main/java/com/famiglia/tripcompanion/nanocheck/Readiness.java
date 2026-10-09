@@ -9,13 +9,13 @@ final class Readiness {
         switch (status) {
             case FeatureStatus.AVAILABLE:
                 return "AVAILABLE\nAndroid reports that the on-device model is ready. "
-                    + "We can proceed to a separate inference test before building the planner.";
+                    + "Tap Test fictional itinerary to try local generation.";
             case FeatureStatus.DOWNLOADABLE:
                 return "DOWNLOADABLE\nAndroid supports this feature, but its model needs downloading. "
-                    + "This diagnostic has not started a model download.";
+                    + "Tap Download model to request it explicitly.";
             case FeatureStatus.DOWNLOADING:
                 return "DOWNLOADING\nAndroid reports that the model is downloading. "
-                    + "Let it finish and check again. This diagnostic did not start the download.";
+                    + "Let it finish and check again.";
             case FeatureStatus.UNAVAILABLE:
                 return "UNAVAILABLE\nThis API is not currently available on this phone. "
                     + "This can reflect device support, AICore configuration or system updates; "

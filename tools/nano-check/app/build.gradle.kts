@@ -4,12 +4,13 @@ android {
     namespace = "com.famiglia.tripcompanion.nanocheck"
     compileSdk = 36
     buildToolsVersion = "36.0.0"
+    buildFeatures { buildConfig = true }
     defaultConfig {
         applicationId = "com.famiglia.tripcompanion.nanocheck"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     compileOptions {
