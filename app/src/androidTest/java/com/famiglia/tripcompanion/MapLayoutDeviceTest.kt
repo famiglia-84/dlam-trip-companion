@@ -1,12 +1,14 @@
 package com.famiglia.tripcompanion
 
+import androidx.activity.ComponentActivity
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.Density
 import androidx.lifecycle.SavedStateHandle
 import androidx.test.core.app.ApplicationProvider
@@ -27,28 +29,35 @@ import org.junit.runner.RunWith
 /** Checks real window/layout/input behavior with a controlled renderer, without Google requests. */
 @RunWith(AndroidJUnit4::class)
 class MapLayoutDeviceTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
     private val device get() = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
     private lateinit var model: MapViewModel
     private val lookup = FakePlaces()
     private val saved = mutableListOf<Pair<String, String>>()
     private var places by mutableStateOf<List<Place>>(emptyList())
     private var fontScale by mutableFloatStateOf(1f)
+    @Volatile private var keyboardVisible = false
+    private var previousKeyboardSetting = ""
 
     @OptIn(ExperimentalMaterial3Api::class)
     @Before fun setUp() {
         device.executeShellCommand("wm density 160")
         device.executeShellCommand("wm size 400x900")
+        previousKeyboardSetting = device.executeShellCommand("settings get secure show_ime_with_hard_keyboard").trim()
+        device.executeShellCommand("settings put secure show_ime_with_hard_keyboard 1")
+        compose.activityRule.scenario.onActivity { it.enableEdgeToEdge() }
         model = MapViewModel(ApplicationProvider.getApplicationContext(), SavedStateHandle(), lookup)
         compose.setContent {
             TripTheme("Dark") {
                 val density = LocalDensity.current
+                val keyboardNow = WindowInsets.ime.getBottom(density) > 0
+                SideEffect { keyboardVisible = keyboardNow }
                 CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale)) {
                     Scaffold(
                         topBar = { TopAppBar(title = { Text("Trip Companion") }) },
                         bottomBar = { NavigationBar { Text("My trips · Saved places · Map") } },
                     ) { padding ->
-                        MapLayout(model, places, null, { id, label -> saved += id to label }, Modifier.padding(padding)) { modifier ->
+                        MapLayout(model, places, null, { id, label -> saved += id to label }, Modifier.padding(padding).consumeWindowInsets(padding)) { modifier ->
                             Surface(modifier, color = MaterialTheme.colorScheme.secondaryContainer) { Text("Controlled map renderer") }
                         }
                     }
@@ -63,19 +72,30 @@ class MapLayoutDeviceTest {
         finally {
             device.executeShellCommand("wm size reset")
             device.executeShellCommand("wm density reset")
+            if (previousKeyboardSetting in listOf("0", "1"))
+                device.executeShellCommand("settings put secure show_ime_with_hard_keyboard $previousKeyboardSetting")
+            else device.executeShellCommand("settings delete secure show_ime_with_hard_keyboard")
         }
     }
 
+    private fun searchForBari(useKeyboard: Boolean = true) {
+        compose.onNodeWithTag("map-search").performClick().performTextInput("Bari")
+        compose.waitUntil(10_000) { keyboardVisible }
+        assertTrue(lookup.searches.isEmpty())
+        if (useKeyboard) compose.onNodeWithTag("map-search").performImeAction()
+        else compose.onNodeWithContentDescription("Search places").performClick()
+        compose.waitUntil(10_000) { !keyboardVisible }
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("map-results").fetchSemanticsNodes().isNotEmpty() }
+    }
+
     private fun selectPlace() {
-        compose.runOnIdle { model.select("luz-id") }
+        searchForBari()
+        compose.onNodeWithText("Luz restaurant").performClick()
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("map-save").fetchSemanticsNodes().isNotEmpty() }
     }
 
     @Test fun searchResultsOverlayTheMapAndSelectionKeepsSaveVisibleWithUniformPadding() {
-        compose.onNodeWithTag("map-search").performTextInput("Bari")
-        assertTrue(lookup.searches.isEmpty())
-        compose.onNodeWithContentDescription("Search places").performClick()
-        compose.waitUntil(10_000) { compose.onAllNodesWithTag("map-results").fetchSemanticsNodes().isNotEmpty() }
+        searchForBari(useKeyboard = false)
         // Compare sibling bounds in the same layout, rather than an earlier IME/window size.
         val searchRoot = compose.onNodeWithTag("map-layout").fetchSemanticsNode().boundsInRoot
         val controls = compose.onNodeWithTag("map-controls").fetchSemanticsNode().boundsInRoot
@@ -126,7 +146,9 @@ class MapLayoutDeviceTest {
         device.executeShellCommand("wm size 400x520")
         compose.waitUntil(10_000) { compose.onAllNodesWithContentDescription("Map options").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("map-save").assertIsDisplayed()
-        assertTrue(compose.onNodeWithTag("map-viewport").fetchSemanticsNode().boundsInRoot.height > 40f)
+        val viewport = compose.onNodeWithTag("map-viewport").fetchSemanticsNode().boundsInRoot
+        val root = compose.onNodeWithTag("map-layout").fetchSemanticsNode().boundsInRoot
+        assertTrue("Short-window map collapsed: root=$root, map=$viewport", viewport.height > 40f)
         compose.onNodeWithContentDescription("Map options").performClick()
         compose.onNodeWithText("Expand map").performClick()
         compose.onNodeWithTag("map-save").assertIsDisplayed()
@@ -136,7 +158,7 @@ class MapLayoutDeviceTest {
         compose.runOnIdle { fontScale = 1.5f }
         compose.onNodeWithTag("map-save").assertIsDisplayed()
         compose.onNodeWithTag("map-save").performClick()
-        assertEquals(listOf("luz-id" to "Saved place"), saved)
+        assertEquals(listOf("luz-id" to "Bari"), saved)
         compose.runOnIdle { places = listOf(Place(name = "My Luz", googlePlaceId = "luz-id")) }
         compose.onNodeWithText("Saved as My Luz").assertIsDisplayed()
         compose.onNodeWithTag("map-save").assertDoesNotExist()

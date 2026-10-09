@@ -105,7 +105,7 @@ fun TravelApp(model: TravelViewModel) {
                 },
                 snackbarHost = { SnackbarHost(snacks) },
             ) { padding ->
-                Row(Modifier.fillMaxSize().padding(padding)) {
+                Row(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)) {
                     if (expanded) NavigationRail {
                         Spacer(Modifier.height(20.dp))
                         NavigationRailItem(selected = route == "trips", onClick = { navigator.navigate("trips") { launchSingleTop = true; popUpTo("trips") } },
