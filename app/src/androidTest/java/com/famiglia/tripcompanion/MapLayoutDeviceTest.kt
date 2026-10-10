@@ -116,7 +116,15 @@ class MapLayoutDeviceTest {
             }
         }
         compose.waitForIdle()
-        compose.waitUntil(10_000) { compose.activity.hasWindowFocus() }
+        try { compose.waitUntil(10_000) { compose.activity.hasWindowFocus() } }
+        catch (failure: ComposeTimeoutException) {
+            val windows = device.executeShellCommand("dumpsys window")
+                .lineSequence().filter { it.contains("mCurrentFocus") || it.contains("mFocusedApp") ||
+                    it.contains("mObscuringWindow") || it.contains("mTopFocusedDisplayId") }.joinToString("\n")
+            throw AssertionError("Map test host did not gain window focus. " +
+                "Lifecycle=${compose.activityRule.scenario.state}, foreground=${device.currentPackageName}, " +
+                "screenOn=${device.isScreenOn}, finishing=${compose.activity.isFinishing}.\n$windows", failure)
+        }
     }
 
     @After fun tearDown() {
@@ -356,7 +364,7 @@ class MapLayoutDeviceTest {
         assertEquals("Expanded card must completely cover the search/toolbar", root.top, card.top, 1f)
         assertEquals(root.bottom, card.bottom, 1f)
         // At this point the previous 24 dp map corner was visible outside the
-        // card's 28 dp corner. A shared clip must reveal only the outer backdrop.
+        // card's 28 dp corner. Matching outlines must reveal only the outer backdrop.
         val cornerPixels = compose.onNodeWithTag("map-layout").captureToImage().toPixelMap()
         val outside = cornerPixels[1, 10]
         val corner = cornerPixels[(card.left - root.left).toInt() + 4, 10]

@@ -133,8 +133,7 @@ internal fun MapLayout(
             .coerceAtMost((rootHeight - topInset - 48.dp).coerceAtLeast(8.dp))
         // The map must be INSIDE the scaffold surface. A transparent full-screen surface
         // placed above a sibling Android View still intercepts its touch hit testing.
-        Box(Modifier.fillMaxSize().testTag("map-sheet-viewport").padding(horizontal = 12.dp)
-            .clip(RoundedCornerShape(28.dp))) {
+        Box(Modifier.fillMaxSize().testTag("map-sheet-viewport").padding(horizontal = 12.dp)) {
             BottomSheetScaffold(
                 scaffoldState = sheetScaffold,
                 sheetPeekHeight = if (state.selected == null) 0.dp else peek + footer, sheetDragHandle = null,
