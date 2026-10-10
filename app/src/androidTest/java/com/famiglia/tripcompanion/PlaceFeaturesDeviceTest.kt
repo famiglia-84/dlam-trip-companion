@@ -82,6 +82,9 @@ class PlaceFeaturesDeviceTest {
         compose.runOnIdle { model.select("pizza-id") }
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("map-save").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithContentDescription("Expand place details").performClick()
+        // Card content appears as soon as expansion starts; wait for its settled
+        // geometry before taking the scroll-position baseline.
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("map-controls").fetchSemanticsNodes().isEmpty() }
         compose.onNodeWithTag("map-reviews").performScrollTo().assertIsDisplayed()
     }
 
@@ -178,6 +181,7 @@ class PlaceFeaturesDeviceTest {
         assertEquals(2, panoramaMounts)
         assertEquals(1, panoramaDisposals)
         device.pressBack()
+        compose.onNodeWithTag("place-feature-card").assertDoesNotExist()
         assertEquals(2, panoramaDisposals)
         compose.onNodeWithTag("map-place-details").assertIsDisplayed()
     }
