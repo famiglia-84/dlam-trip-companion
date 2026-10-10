@@ -204,8 +204,8 @@ class MapLayoutDeviceTest {
         assertTrue("Map focus and SDK controls must sit below the floating search", safeBeforeSelection.top >= controls.bottom)
         val frame = compose.onNodeWithTag("map-frame").fetchSemanticsNode().boundsInRoot
         val searchField = compose.onNodeWithTag("map-search").fetchSemanticsNode().boundsInRoot
-        assertEquals(searchField.left, frame.left, 1f)
-        assertEquals(searchField.right, frame.right, 1f)
+        assertEquals(frame.left + 8f, searchField.left, 1f)
+        assertEquals(frame.right - 8f, searchField.right, 1f)
         assertEquals(12f, frame.left - searchRoot.left, 1f)
         val toolbar = compose.onNodeWithTag("map-toolbar").fetchSemanticsNode().boundsInRoot
         assertTrue("Actions must sit above search", toolbar.bottom <= searchField.top)
@@ -217,7 +217,7 @@ class MapLayoutDeviceTest {
         compose.onNodeWithTag("map-save").assertIsDisplayed()
         compose.onNodeWithTag("map-search").assertIsNotFocused()
         val search = compose.onNodeWithTag("map-search").fetchSemanticsNode().boundsInRoot
-        assertEquals(48f, search.height, 1f) // Fixture uses 160 dpi and the standard text scale.
+        assertEquals(56f, search.height, 1f) // Fixture uses 160 dpi and the standard text scale.
         compose.waitUntil(10_000) {
             val safe = compose.onNodeWithTag("map-safe-content").fetchSemanticsNode().boundsInRoot
             val sheet = compose.onNodeWithTag("map-card-surround").fetchSemanticsNode().boundsInRoot
@@ -228,12 +228,20 @@ class MapLayoutDeviceTest {
         val surround = compose.onNodeWithTag("map-card-surround").fetchSemanticsNode().boundsInRoot
         val card = compose.onNodeWithTag("map-place-card").fetchSemanticsNode().boundsInRoot
         val safeMap = compose.onNodeWithTag("map-safe-content").fetchSemanticsNode().boundsInRoot
-        assertTrue("Visible map should occupy most of the selected-place screen", safeMap.height > root.height * 0.5f)
+        assertTrue("The larger photo summary must leave a useful map area", safeMap.height > root.height * 0.4f)
         assertEquals(safeMap.bottom + 8f, surround.top, 1f)
         assertEquals(card.left - surround.left, card.top - surround.top, 1f)
         assertEquals(root.bottom, map.bottom, 1f)
         assertTrue(compose.onNodeWithTag("map-save").fetchSemanticsNode().boundsInRoot.bottom <=
             compose.onNodeWithTag("place-detail-name").fetchSemanticsNode().boundsInRoot.top)
+        val thumbnail = compose.onNodeWithTag("map-place-thumbnail").fetchSemanticsNode().boundsInRoot
+        val heading = compose.onNodeWithTag("place-detail-name").fetchSemanticsNode().boundsInRoot
+        assertTrue("Place text must sit beside the rounded thumbnail", heading.left >= thumbnail.right + 16f)
+        assertEquals(80f, thumbnail.width, 1f)
+        compose.onNodeWithText("Photo: Sample photographer").assertIsDisplayed()
+        assertTrue("Collapsed card must end above the footer", card.bottom <= root.bottom - 12f + 1f)
+        val backdrop = compose.onNodeWithTag("map-lower-backdrop").fetchSemanticsNode().boundsInRoot
+        assertTrue("Shared lower backdrop must cover the gap below the card", backdrop.top <= card.bottom && backdrop.bottom == root.bottom)
         assertTrue(saved.isEmpty())
         compose.onNodeWithTag("map-save").performClick()
         assertEquals(listOf(Triple("luz-id", "Luz", "Via Giuseppe Re David, 32, 70126 Bari BA, Italy")), saved)
@@ -335,6 +343,7 @@ class MapLayoutDeviceTest {
         compose.onNodeWithTag("map-save").assertIsDisplayed()
         assertEquals(toolbar.top, compose.onNodeWithTag("place-details-toolbar").fetchSemanticsNode().boundsInRoot.top, 1f)
         assertEquals(listOf("luz-id"), lookup.richCalls)
+        assertEquals("One cached thumbnail lookup across sheet states", listOf("luz-id"), lookup.photoCalls)
         device.pressBack()
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("map-place-details").fetchSemanticsNodes().isEmpty() }
         compose.onNodeWithTag("map-save").assertIsDisplayed()
@@ -385,6 +394,12 @@ class MapLayoutDeviceTest {
     private class FakePlaces : PlaceLookup {
         val searches = mutableListOf<String>()
         val richCalls = mutableListOf<String>()
+        val photoCalls = mutableListOf<String>()
+        override suspend fun thumbnail(id: String): PlacePhoto {
+            photoCalls += id
+            return PlacePhoto("content://com.famiglia.tripcompanion.test/preview",
+                listOf(com.famiglia.tripcompanion.maps.PhotoCredit("Sample photographer", "https://example.com/photographer")))
+        }
         override suspend fun moreDetails(id: String): PlaceDetails {
             richCalls += id
             return PlaceDetails(photos = listOf(PlacePhoto("content://com.famiglia.tripcompanion.test/preview")), rating = 4.5, ratingCount = 12, openNow = true,
@@ -397,7 +412,7 @@ class MapLayoutDeviceTest {
             return listOf(PlaceSuggestion("luz-id", "Luz restaurant", "Bari"), PlaceSuggestion("museum-id", "Museum", "Bari"))
         }
         override suspend fun details(id: String, fromSearch: Boolean) = MapLocation(
-            id, "Luz", "Via Giuseppe Re David, 32, 70126 Bari BA, Italy", 41.1, 16.9,
+            id, "Luz", "Via Giuseppe Re David, 32, 70126 Bari BA, Italy", 41.1, 16.9, category = "Restaurant",
         )
     }
 }

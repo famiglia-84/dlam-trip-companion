@@ -22,6 +22,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -34,6 +35,7 @@ internal fun MapPlaceSheet(selected: MapLocation, saved: Place?, model: MapViewM
     height: Dp, compact: Boolean, expanded: Boolean, toggle: () -> Unit, save: () -> Unit,
     appearance: (@Composable () -> Unit)? = null) {
     val localPhoto = saved?.photoUri.orEmpty()
+    val thumbnail = rememberPlaceThumbnail(selected.id, localPhoto, model)
     Surface(color = Color.Transparent, modifier = Modifier.fillMaxWidth().testTag("map-card-surround")) {
         GlassSurface(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 12.dp).height((height - 12.dp).coerceAtLeast(1.dp)).testTag("map-place-card"),
             kind = GlassKind.Details, shape = RoundedCornerShape(24.dp)) {
@@ -41,7 +43,7 @@ internal fun MapPlaceSheet(selected: MapLocation, saved: Place?, model: MapViewM
                 Column(Modifier.fillMaxWidth().testTag("place-details-toolbar").padding(horizontal = 12.dp, vertical = 4.dp)) {
                     SheetHandle()
                     BoxWithConstraints(Modifier.fillMaxWidth()) {
-                        val saveSpace = if (appearance != null) 352.dp else 304.dp
+                        val saveSpace = if (expanded && appearance != null) 352.dp else 304.dp
                         val compactSave = maxWidth < saveSpace || LocalDensity.current.fontScale > 1.3f
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
@@ -54,7 +56,7 @@ internal fun MapPlaceSheet(selected: MapLocation, saved: Place?, model: MapViewM
                                 Spacer(Modifier.width(8.dp))
                                 if (compactSave) FilledIconButton(onClick = save, enabled = !state.busy,
                                     modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp).testTag("map-save"), shape = RoundedCornerShape(12.dp)) {
-                                    Icon(Icons.Default.BookmarkBorder, "Save place")
+                                    Icon(Icons.Default.BookmarkBorder, "Save place", Modifier.size(26.dp))
                                 } else PlaceSaveButton(state.busy, save, "Save")
                             }
                             PlaceSheetControls(expanded, toggle, model::dismissSelection)
@@ -63,11 +65,21 @@ internal fun MapPlaceSheet(selected: MapLocation, saved: Place?, model: MapViewM
                     }
                 }
                 // Keep one heading mounted at the same position throughout the gesture.
-                Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState(), enabled = expanded)
-                    .padding(12.dp).then(if (expanded) Modifier.testTag("map-place-details") else Modifier),
+                Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState(), enabled = expanded || compact || LocalDensity.current.fontScale > 1.3f)
+                    .padding(16.dp).then(if (expanded) Modifier.testTag("map-place-details") else Modifier),
                     verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    PlaceHeading(selected, expanded, compact)
-                    saved?.let { Text(savedLabel(it, selected), style = MaterialTheme.typography.labelLarge) }
+                    // The same photo/heading stays mounted in both positions; the whole
+                    // summary scrolls away with the body when expanded.
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        PlaceImage(localPhoto, thumbnail, selected.name,
+                            Modifier.size(if (compact || LocalDensity.current.fontScale > 1.3f) 64.dp else 80.dp)
+                                .testTag("map-place-thumbnail"), selected.category)
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            PlaceHeading(selected, expanded, compact)
+                            saved?.let { Text(savedLabel(it, selected), style = MaterialTheme.typography.bodyLarge) }
+                        }
+                    }
+                    if (localPhoto.isBlank()) PhotoCredits(thumbnail, horizontal = true)
                     if (expanded) {
                         PlaceActions(selected, state.details)
                         if (localPhoto.isNotBlank()) PlaceImage(localPhoto, null, selected.name, Modifier.fillMaxWidth().height(160.dp))
@@ -104,13 +116,13 @@ internal fun MapPlaceSheet(selected: MapLocation, saved: Place?, model: MapViewM
 private fun PlaceHeading(place: MapLocation, expanded: Boolean, compact: Boolean) {
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(place.name, Modifier.testTag("place-detail-name"),
-            style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp, lineHeight = 24.sp),
+            style = MaterialTheme.typography.titleMedium.copy(fontSize = 22.sp, lineHeight = 30.sp, fontWeight = FontWeight.SemiBold),
             maxLines = if (expanded) Int.MAX_VALUE else 1, overflow = TextOverflow.Ellipsis)
         if (place.category.isNotBlank())
-            Text(place.category, style = MaterialTheme.typography.bodySmall,
+            Text(place.category, style = MaterialTheme.typography.bodyLarge,
                 maxLines = if (expanded) Int.MAX_VALUE else 1, overflow = TextOverflow.Ellipsis)
         if (place.address.isNotBlank()) Text(place.address, Modifier.testTag("place-detail-address"),
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.bodyLarge,
             maxLines = if (expanded) Int.MAX_VALUE else if (compact) 1 else 2, overflow = TextOverflow.Ellipsis)
     }
 }
@@ -127,15 +139,15 @@ private fun SheetHandle() {
 
 @Composable
 private fun RowScope.PlaceSheetControls(expanded: Boolean, toggle: () -> Unit, close: () -> Unit) {
-    FilledTonalIconButton(onClick = toggle, colors = IconButtonDefaults.filledTonalIconButtonColors(containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.75f))) { Icon(if (expanded) Icons.Default.ExpandMore else Icons.Default.ExpandLess,
-        if (expanded) "Collapse place details" else "Expand place details") }
-    FilledTonalIconButton(onClick = close, colors = IconButtonDefaults.filledTonalIconButtonColors(containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.75f))) { Icon(Icons.Default.Close, "Close place") }
+    FilledTonalIconButton(onClick = toggle, modifier = Modifier.size(48.dp), colors = IconButtonDefaults.filledTonalIconButtonColors(containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.75f))) { Icon(if (expanded) Icons.Default.ExpandMore else Icons.Default.ExpandLess,
+        if (expanded) "Collapse place details" else "Expand place details", Modifier.size(26.dp)) }
+    FilledTonalIconButton(onClick = close, modifier = Modifier.size(48.dp), colors = IconButtonDefaults.filledTonalIconButtonColors(containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.75f))) { Icon(Icons.Default.Close, "Close place", Modifier.size(26.dp)) }
 }
 
 @Composable
 private fun PlaceSaveButton(busy: Boolean, save: () -> Unit, label: String) {
     Button(onClick = save, enabled = !busy, shape = RoundedCornerShape(20.dp), modifier = Modifier.heightIn(min = 48.dp).testTag("map-save")) {
-        Icon(Icons.Default.BookmarkBorder, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(label)
+        Icon(Icons.Default.BookmarkBorder, null, Modifier.size(24.dp)); Spacer(Modifier.width(6.dp)); Text(label, style = MaterialTheme.typography.bodyLarge)
     }
 }
 

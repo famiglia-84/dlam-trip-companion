@@ -106,21 +106,23 @@ fun TravelApp(model: TravelViewModel) {
                             } },
                             actions = {
                                 if (route == "places") IconButton(onClick = { edit("place") }) { Icon(Icons.Default.Add, "Save a place") }
-                                IconButton(onClick = model::cycleTheme) { Icon(Icons.Default.Contrast, "Theme: $theme. Change appearance") }
+                                IconButton(onClick = model::cycleTheme) { Icon(Icons.Default.Contrast, "Theme: $theme. Change appearance", Modifier.size(26.dp)) }
                             },
                         )
                     }
                 },
                 bottomBar = {
-                    if (!expanded) Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 12.dp, vertical = 8.dp)) {
-                        GlassSurface(Modifier.fillMaxWidth().testTag("glass-navigation"), shape = RoundedCornerShape(28.dp)) {
+                    if (!expanded) Box(Modifier.fillMaxWidth()
+                        .then(if (route == "maps" && maps.configured) Modifier.background(mapLowerBackdrop()) else Modifier)
+                        .navigationBarsPadding().padding(horizontal = 12.dp, vertical = 8.dp)) {
+                        GlassSurface(Modifier.fillMaxWidth().testTag("glass-navigation"), kind = GlassKind.Dock, shape = RoundedCornerShape(28.dp)) {
                             NavigationBar(containerColor = Color.Transparent, tonalElevation = 0.dp, windowInsets = WindowInsets(0, 0, 0, 0)) {
                                 NavigationBarItem(selected = route == "trips", onClick = { navigator.navigate("trips") { launchSingleTop = true; popUpTo("trips"); restoreState = true } },
-                                    icon = { Icon(Icons.Default.Luggage, null) }, label = { Text("My trips") })
+                                    icon = { Icon(Icons.Default.Luggage, null, Modifier.size(26.dp)) }, label = { Text("My trips", style = MaterialTheme.typography.labelLarge) })
                                 NavigationBarItem(selected = route == "places", onClick = { navigator.navigate("places") { launchSingleTop = true } },
-                                    icon = { Icon(Icons.Default.Bookmarks, null) }, label = { Text("Saved places") })
+                                    icon = { Icon(Icons.Default.Bookmarks, null, Modifier.size(26.dp)) }, label = { Text("Saved places", style = MaterialTheme.typography.labelLarge) })
                                 NavigationBarItem(selected = route == "maps", onClick = { navigator.navigate("maps") { launchSingleTop = true } },
-                                    icon = { Icon(Icons.Default.Map, null) }, label = { Text("Map") })
+                                    icon = { Icon(Icons.Default.Map, null, Modifier.size(26.dp)) }, label = { Text("Map", style = MaterialTheme.typography.labelLarge) })
                             }
                         }
                     }
@@ -132,16 +134,16 @@ fun TravelApp(model: TravelViewModel) {
                 val contentPadding = PaddingValues(start = padding.calculateStartPadding(direction), top = padding.calculateTopPadding(),
                     end = padding.calculateEndPadding(direction), bottom = if (mapBehindDock) 0.dp else padding.calculateBottomPadding())
                 Row(Modifier.fillMaxSize().padding(contentPadding).consumeWindowInsets(padding)) {
-                    if (expanded) GlassSurface(Modifier.padding(8.dp).testTag("glass-navigation-rail")) {
+                    if (expanded) GlassSurface(Modifier.padding(8.dp).testTag("glass-navigation-rail"), kind = GlassKind.Dock) {
                         NavigationRail(containerColor = Color.Transparent) {
                             Spacer(Modifier.height(20.dp))
                             NavigationRailItem(selected = route == "trips", onClick = { navigator.navigate("trips") { launchSingleTop = true; popUpTo("trips") } },
-                                icon = { Icon(Icons.Default.Luggage, null) }, label = { Text("My trips") })
+                                icon = { Icon(Icons.Default.Luggage, null, Modifier.size(26.dp)) }, label = { Text("My trips", style = MaterialTheme.typography.labelLarge) })
                             Spacer(Modifier.height(12.dp))
                             NavigationRailItem(selected = route == "places", onClick = { navigator.navigate("places") { launchSingleTop = true } },
-                                icon = { Icon(Icons.Default.Bookmarks, null) }, label = { Text("Places") })
+                                icon = { Icon(Icons.Default.Bookmarks, null, Modifier.size(26.dp)) }, label = { Text("Places", style = MaterialTheme.typography.labelLarge) })
                             NavigationRailItem(selected = route == "maps", onClick = { navigator.navigate("maps") { launchSingleTop = true } },
-                                icon = { Icon(Icons.Default.Map, null) }, label = { Text("Map") })
+                                icon = { Icon(Icons.Default.Map, null, Modifier.size(26.dp)) }, label = { Text("Map", style = MaterialTheme.typography.labelLarge) })
                         }
                     }
                     NavHost(navigator, startDestination = "trips", modifier = Modifier.weight(1f)) {
@@ -167,7 +169,7 @@ fun TravelApp(model: TravelViewModel) {
                         composable("maps") {
                             MapPane(maps, data.places, null, ::saveMapPlace, requestedPlaceId = requestedMapPlace,
                                 consumedRequest = { requestedMapPlace = null }, appearance = {
-                                    IconButton(onClick = model::cycleTheme) { Icon(Icons.Default.Contrast, "Theme: $theme. Change appearance") }
+                                    IconButton(onClick = model::cycleTheme) { Icon(Icons.Default.Contrast, "Theme: $theme. Change appearance", Modifier.size(26.dp)) }
                                 }, bottomOverlay = if (mapBehindDock) padding.calculateBottomPadding() else 0.dp)
                         }
                     }

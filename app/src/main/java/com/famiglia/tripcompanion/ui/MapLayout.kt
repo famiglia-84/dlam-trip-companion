@@ -3,6 +3,7 @@ package com.famiglia.tripcompanion.ui
 import android.text.method.LinkMovementMethod
 import android.widget.TextView
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -101,8 +102,9 @@ internal fun MapLayout(
         val shortWindow = sheetHeight < 420.dp
         val desiredPeek = if (state.selected == null) 0.dp else minOf(sheetHeight,
             if (shortWindow) {
-                if (LocalDensity.current.fontScale > 1.3f) 244.dp else 200.dp
-            } else if (LocalDensity.current.fontScale > 1.3f) 292.dp else 224.dp)
+                if (LocalDensity.current.fontScale > 1.3f) 264.dp else 224.dp
+            } else if (LocalDensity.current.fontScale > 1.3f) 384.dp
+            else if (places.any { it.googlePlaceId == state.selected?.id }) 320.dp else 288.dp)
         val density = LocalDensity.current
         var controlsHeight by remember { mutableIntStateOf(0) }
         val controlsTop = with(density) { controlsHeight.toDp() }
@@ -151,12 +153,17 @@ internal fun MapLayout(
                     // the attribution, zoom controls and camera focus from all of these overlays.
                     Box(Modifier.fillMaxSize().testTag("map-viewport")) {
                         Surface(Modifier.fillMaxSize().padding(horizontal = 12.dp).testTag("map-frame"),
-                            shape = RoundedCornerShape(20.dp), border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f))) {
-                            map(Modifier.fillMaxSize().clip(RoundedCornerShape(20.dp))
+                            shape = RoundedCornerShape(24.dp), border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f))) {
+                            map(Modifier.fillMaxSize().clip(RoundedCornerShape(24.dp))
                                 .then(if (detailsExpanded) Modifier.clearAndSetSemantics { } else Modifier),
                                 if (detailsExpanded) PaddingValues(8.dp) else PaddingValues(start = 8.dp, top = topInset, end = 8.dp, bottom = bottomInset))
                         }
                     }
+                    // Draw only in the covered lower area. A full-screen Surface here would
+                    // block native map gestures even when its fill were transparent.
+                    Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                        .height(minOf(rootHeight, footer + covered))
+                        .background(mapLowerBackdrop()).testTag("map-lower-backdrop"))
                     Column(Modifier.fillMaxWidth().onSizeChanged { controlsHeight = it.height }) {
                         if (!expandedMap) MapControls(query, model::changeQuery, !state.busy, shortWindow,
                             ::search, ::savedPlaces, { dismissKeyboard(); showInfo = true }, ::expand, appearance)
@@ -210,23 +217,23 @@ private fun MapControls(query: String, changeQuery: (String) -> Unit, enabled: B
     search: () -> Unit, savedPlaces: () -> Unit, information: () -> Unit, expand: () -> Unit,
     appearance: (@Composable () -> Unit)?) {
     var showOptions by remember { mutableStateOf(false) }
-    Column(Modifier.fillMaxWidth().testTag("map-controls").padding(horizontal = 12.dp, vertical = 4.dp)) {
-        GlassSurface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
+    Column(Modifier.fillMaxWidth().testTag("map-controls").padding(horizontal = 20.dp, vertical = 8.dp)) {
+        GlassSurface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp)) {
             BoxWithConstraints(Modifier.fillMaxWidth().testTag("map-toolbar")) {
-                val separateActions = !shortWindow && maxWidth >= 360.dp && LocalDensity.current.fontScale <= 1.3f
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                val separateActions = !shortWindow && maxWidth >= 344.dp && LocalDensity.current.fontScale <= 1.3f
+                Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.weight(1f)) {
                         TextButton(onClick = savedPlaces, enabled = enabled,
                             modifier = Modifier.heightIn(min = 48.dp).testTag("map-saved-places")) {
-                            Icon(Icons.Default.BookmarkBorder, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp))
-                            Text("Saved places")
+                            Icon(Icons.Default.BookmarkBorder, null, Modifier.size(24.dp)); Spacer(Modifier.width(6.dp))
+                            Text("Saved places", style = MaterialTheme.typography.bodyLarge)
                         }
                     }
                     if (separateActions) {
-                        IconButton(onClick = information) { Icon(Icons.Default.Info, "Map information") }
-                        IconButton(onClick = expand) { Icon(Icons.Default.Fullscreen, "Expand map") }
+                        IconButton(onClick = information) { Icon(Icons.Default.Info, "Map information", Modifier.size(26.dp)) }
+                        IconButton(onClick = expand) { Icon(Icons.Default.Fullscreen, "Expand map", Modifier.size(26.dp)) }
                     } else Box {
-                        IconButton(onClick = { showOptions = true }) { Icon(Icons.Default.MoreVert, "Map options") }
+                        IconButton(onClick = { showOptions = true }) { Icon(Icons.Default.MoreVert, "Map options", Modifier.size(26.dp)) }
                         DropdownMenu(expanded = showOptions, onDismissRequest = { showOptions = false }) {
                             DropdownMenuItem(text = { Text("Map information") }, onClick = { showOptions = false; information() })
                             DropdownMenuItem(text = { Text("Expand map") }, onClick = { showOptions = false; expand() })
@@ -241,7 +248,7 @@ private fun MapControls(query: String, changeQuery: (String) -> Unit, enabled: B
     }
 }
 
-/** A 48 dp search field that grows for larger text instead of clipping it. */
+/** A 56 dp search field that grows for larger text instead of clipping it. */
 @Composable
 internal fun MapSearchField(value: String, change: (String) -> Unit, canSearch: Boolean, search: (() -> Unit)?, modifier: Modifier, hint: String = "Place, address or city") {
     val interaction = remember { MutableInteractionSource() }
@@ -253,11 +260,11 @@ internal fun MapSearchField(value: String, change: (String) -> Unit, canSearch: 
         cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
         keyboardOptions = KeyboardOptions(imeAction = if (search != null) ImeAction.Search else ImeAction.Done),
         keyboardActions = KeyboardActions(onSearch = { search?.invoke() }, onDone = { keyboard?.hide() }),
-        modifier = modifier.heightIn(min = 48.dp).testTag(if (search != null) "map-search" else "places-search").semantics { contentDescription = hint },
+        modifier = modifier.heightIn(min = 56.dp).testTag(if (search != null) "map-search" else "places-search").semantics { contentDescription = hint },
         decorationBox = { input ->
             GlassSurface(shape = RoundedCornerShape(24.dp), focused = focused) {
-                Row(Modifier.heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Search, null, Modifier.padding(start = 12.dp, end = 10.dp).size(22.dp))
+                Row(Modifier.heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Search, null, Modifier.padding(start = 12.dp, end = 10.dp).size(24.dp))
                     Box(Modifier.weight(1f).padding(vertical = 8.dp)) {
                         if (value.isEmpty()) Text(hint, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         input()

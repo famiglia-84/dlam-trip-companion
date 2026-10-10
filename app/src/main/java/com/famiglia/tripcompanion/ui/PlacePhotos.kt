@@ -2,6 +2,8 @@ package com.famiglia.tripcompanion.ui
 
 import android.text.method.LinkMovementMethod
 import android.widget.TextView
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -61,12 +63,12 @@ internal fun PlaceImage(localUri: String, photo: PlacePhoto?, name: String, modi
 }
 
 @Composable
-internal fun PhotoCredits(photo: PlacePhoto?, modifier: Modifier = Modifier) {
+internal fun PhotoCredits(photo: PlacePhoto?, modifier: Modifier = Modifier, horizontal: Boolean = false) {
     val uriHandler = LocalUriHandler.current
     val textColor = MaterialTheme.colorScheme.onSurface.toArgb()
     val linkColor = MaterialTheme.colorScheme.primary.toArgb()
     if (photo == null) return
-    Column(modifier) {
+    val credits: @Composable () -> Unit = {
         photo.credits.forEach { credit ->
             val uri = credit.uri?.takeIf { it.startsWith("https://") || it.startsWith("http://") }
             if (uri != null) TextButton(onClick = { uriHandler.openUri(uri) }, contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp)) {
@@ -78,6 +80,9 @@ internal fun PhotoCredits(photo: PlacePhoto?, modifier: Modifier = Modifier) {
             update = { it.text = HtmlCompat.fromHtml(photo.attributionHtml, HtmlCompat.FROM_HTML_MODE_LEGACY); it.setTextColor(textColor); it.setLinkTextColor(linkColor) },
         )
     }
+    if (horizontal) Row(modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)) { credits() }
+    else Column(modifier) { credits() }
 }
 
 @Composable
