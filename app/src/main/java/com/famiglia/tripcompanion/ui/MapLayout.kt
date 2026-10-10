@@ -65,17 +65,7 @@ internal fun MapLayout(
     val state by model.state.collectAsStateWithLifecycle()
     val query by model.query.collectAsStateWithLifecycle()
     var feature by rememberSaveable(state.selected?.id) { mutableStateOf<PlaceFeature?>(null) }
-    // Own the place-body scroll outside the scaffold's swipe modifier changes.
-    // Preserve the exact position across focus/bring-into-view changes from secondary cards.
-    val placeScroll = key(state.selected?.id) { rememberScrollState() }
-    var returnScroll by rememberSaveable(state.selected?.id) { mutableStateOf<Int?>(null) }
-    LaunchedEffect(feature, state.selected?.id) {
-        if (feature == PlaceFeature.Reviews) model.loadReviews()
-        if (feature == null) returnScroll?.let { position ->
-            placeScroll.scrollTo(position)
-            returnScroll = null
-        }
-    }
+    LaunchedEffect(feature, state.selected?.id) { if (feature == PlaceFeature.Reviews) model.loadReviews() }
     val openedFeature = feature
     DisposableEffect(model, openedFeature, state.selected?.id) {
         onDispose { if (openedFeature == PlaceFeature.Reviews) model.cancelReviewsLoad() }
@@ -168,8 +158,7 @@ internal fun MapLayout(
                                     toggle = { scope.launch { if (sheetExpanded) sheet.partialExpand() else sheet.expand() } },
                                     save = { dismissKeyboard(); save(selected.id, selected.name.ifBlank { "Saved place" }, selected.address) },
                                     unsave = unsave,
-                                    appearance = appearance, compactHeight = { compactHeight = it }, scrollState = placeScroll,
-                                    openFeature = { returnScroll = placeScroll.value; dismissKeyboard(); feature = it })
+                                    appearance = appearance, compactHeight = { compactHeight = it }, openFeature = { feature = it })
                             } ?: Spacer(Modifier.height(1.dp)) }
                         }
                     }
@@ -235,7 +224,7 @@ internal fun MapLayout(
         val selected = state.selected
         val activeFeature = feature
         if (selected != null && activeFeature != null) {
-            PlaceFeatureCard(activeFeature, selected, rootHeight, footer, dismiss = { dismissKeyboard(); feature = null }) {
+            PlaceFeatureCard(activeFeature, selected, rootHeight, footer, dismiss = { feature = null }) {
                 if (activeFeature == PlaceFeature.Reviews) PlaceReviewsCard(selected, state, model)
                 else PlaceStreetView(selected)
             }

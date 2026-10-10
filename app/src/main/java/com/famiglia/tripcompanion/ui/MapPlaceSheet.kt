@@ -4,7 +4,6 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
-import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -39,7 +38,7 @@ import com.famiglia.tripcompanion.maps.*
 @Composable
 internal fun MapPlaceSheet(selected: MapLocation, saved: Place?, model: MapViewModel, state: MapSearchState,
     height: Dp, compact: Boolean, expanded: Boolean, bottomClearance: Dp = 0.dp, toggle: () -> Unit, save: () -> Unit,
-    appearance: (@Composable () -> Unit)? = null, compactHeight: (Int) -> Unit = {}, unsave: (Place) -> Unit = {}, openFeature: (PlaceFeature) -> Unit = {}, scrollState: ScrollState = rememberScrollState()) {
+    appearance: (@Composable () -> Unit)? = null, compactHeight: (Int) -> Unit = {}, unsave: (Place) -> Unit = {}, openFeature: (PlaceFeature) -> Unit = {}) {
     val localPhoto = saved?.photoUri.orEmpty()
     val thumbnail = rememberPlaceThumbnail(selected.id, localPhoto, model)
     val pinnedSave = !expanded && (compact || LocalDensity.current.fontScale > 1.3f)
@@ -79,7 +78,7 @@ internal fun MapPlaceSheet(selected: MapLocation, saved: Place?, model: MapViewM
                     // One shared heading remains mounted; the whole summary scrolls
                     // with expanded details, including the unified place-action row.
                     Column(Modifier.weight(1f).fillMaxWidth()
-                        .verticalScroll(scrollState, enabled = expanded || compact || LocalDensity.current.fontScale > 1.3f)
+                        .verticalScroll(rememberScrollState(), enabled = expanded || compact || LocalDensity.current.fontScale > 1.3f)
                         .then(if (expanded) Modifier.testTag("map-place-details") else Modifier)) {
                         Column(Modifier.fillMaxWidth().onSizeChanged { if (!expanded) summaryHeight = it.height }
                             .padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

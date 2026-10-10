@@ -84,7 +84,10 @@ class PlaceFeaturesDeviceTest {
         compose.onNodeWithContentDescription("Expand place details").performClick()
         // Card content appears as soon as expansion starts; wait for its settled
         // geometry before taking the scroll-position baseline.
-        compose.waitUntil(10_000) { compose.onAllNodesWithTag("map-controls").fetchSemanticsNodes().isEmpty() }
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithTag("map-controls").fetchSemanticsNodes().isEmpty() &&
+                compose.onAllNodesWithTag("map-reviews").fetchSemanticsNodes().isNotEmpty()
+        }
         compose.onNodeWithTag("map-reviews").performScrollTo().assertIsDisplayed()
     }
 
