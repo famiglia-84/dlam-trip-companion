@@ -1,5 +1,7 @@
 # Version 0.8.0 nearby discovery checks
 
+The dedicated CI AVD preparation script now refuses physical devices and disables only Pixel Launcher when installed. Repeated window/density resizing caused a `com.google.android.apps.nexuslauncher` ANR dialog to obscure the test activities. Instrumented tests launch activities directly; their app focus, native input and error checks remain enabled, and no error dialogs are globally suppressed. This change does not affect the installed Trip Companion APK.
+
 The local suite adds eight checks for explicit/bounded nearby requests, area changes during a request, empty/error recovery, cancellation without stale results, retained saved pins, map-area geometry (including the dateline), layout/focus changes that do not prompt a refresh, and camera commands that never refit on card dismissal. Two native layout checks exercise discovery controls, physical native map input, selection/dismissal, and short-window visibility with controlled providers. Existing Reviews, Street View and editor/layout checks remain enabled. Live Google authentication, nearby results, billing and camera/panorama rendering still require the signed APK on a device.
 
 # Validation
