@@ -26,6 +26,7 @@ import com.famiglia.tripcompanion.maps.*
 import com.famiglia.tripcompanion.ui.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.flow.first
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
@@ -125,7 +126,7 @@ class SavedPlacesDeviceTest {
         val finalNote = compose.onNodeWithText("Check opening hours before visiting. Google photos and details need a connection.")
             .fetchSemanticsNode().boundsInRoot
         assertTrue("The last item must scroll fully above the floating navigation", finalNote.bottom <= dock.top)
-        compose.onNodeWithTag("map-saved-status").performScrollTo().assertIsNotEnabled()
+        compose.onNodeWithTag("map-saved-status").performScrollTo().assertIsEnabled()
         compose.onNodeWithTag("map-save").assertDoesNotExist()
         compose.onAllNodes(themeAction).assertCountEquals(1)
         val previousTheme = compose.onNode(themeAction).fetchSemanticsNode().config[SemanticsProperties.ContentDescription]
@@ -136,6 +137,45 @@ class SavedPlacesDeviceTest {
         assertEquals(listOf("luz-id"), lookup.selected)
         assertEquals(listOf("luz-id"), lookup.photos.distinct())
 
+    }
+
+    @Test fun unsavingRequiresConfirmationKeepsTheCardAndPreservesItineraryNotes() {
+        val activityId = runBlocking(Dispatchers.IO) {
+            val place = app.repository.data.first().places.first { it.id == linkedId }
+            app.repository.save(place.copy(notes = "Private saved-place note"))
+            val trip = app.repository.save(Trip(destination = "Bari", startDate = "2026-10-10", endDate = "2026-10-11"))
+            val plan = app.repository.save(DayPlan(tripId = trip, date = "2026-10-10"))
+            app.repository.save(PlanActivity(planId = plan, title = "Coffee stop", time = "09:00", placeId = linkedId, notes = "Keep this itinerary note"))
+        }
+        compose.onNodeWithTag("place-image-$linkedId").performClick()
+        compose.waitUntil(15_000) { compose.onAllNodesWithTag("map-saved-status").fetchSemanticsNodes().isNotEmpty() }
+        // Compact Saved is actionable too. Cancelling must leave the full record intact.
+        compose.onNodeWithTag("map-saved-status").assertIsEnabled().performClick()
+        compose.onNodeWithText("Remove Luz Café from saved places?").assertIsDisplayed()
+        compose.onNodeWithText("Keep it").performClick()
+        val kept = runBlocking(Dispatchers.IO) { app.repository.data.first().places.first { it.id == linkedId } }
+        assertEquals("Private saved-place note", kept.notes)
+        compose.onNodeWithTag("map-saved-status").assertIsDisplayed()
+        // Expanded Saved uses the same confirmation and removes only this local entry.
+        compose.onNodeWithContentDescription("Expand place details").performClick()
+        compose.onNodeWithTag("map-saved-status").performScrollTo().performClick()
+        compose.onNodeWithText("Remove Luz Café from saved places?").assertIsDisplayed()
+        compose.onNodeWithText("This removes this saved entry, including its notes and trip assignment. Your itinerary activities and their notes are kept, but their link to this saved place is removed. This cannot be undone.").assertIsDisplayed()
+        compose.onNodeWithText("Remove", useUnmergedTree = true).performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("map-save").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("map-save").assertIsEnabled()
+        compose.onNodeWithTag("map-place-details").assertIsDisplayed()
+        compose.onNodeWithTag("place-detail-name").assertTextEquals("Provider place")
+        val remaining = runBlocking(Dispatchers.IO) { app.repository.data.first() }
+        assertEquals(listOf(manualId), remaining.places.map { it.id })
+        val activity = remaining.activities.single { it.id == activityId }
+        assertNull(activity.placeId)
+        assertEquals("Coffee stop", activity.title)
+        assertEquals("09:00", activity.time)
+        assertEquals("Keep this itinerary note", activity.notes)
+        assertEquals(1, remaining.trips.size)
+        assertEquals(1, remaining.plans.size)
+        assertEquals(listOf("luz-id"), lookup.selected)
     }
 
     @Test fun unlinkedImagePrefillsSearchWithoutRequestsAndTheDockRevealsTheMap() {

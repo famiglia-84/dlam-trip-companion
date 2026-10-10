@@ -37,7 +37,7 @@ import com.famiglia.tripcompanion.maps.*
 @Composable
 internal fun MapPlaceSheet(selected: MapLocation, saved: Place?, model: MapViewModel, state: MapSearchState,
     height: Dp, compact: Boolean, expanded: Boolean, bottomClearance: Dp = 0.dp, toggle: () -> Unit, save: () -> Unit,
-    appearance: (@Composable () -> Unit)? = null, compactHeight: (Int) -> Unit = {}) {
+    appearance: (@Composable () -> Unit)? = null, compactHeight: (Int) -> Unit = {}, unsave: (Place) -> Unit = {}) {
     val localPhoto = saved?.photoUri.orEmpty()
     val thumbnail = rememberPlaceThumbnail(selected.id, localPhoto, model)
     val pinnedSave = !expanded && (compact || LocalDensity.current.fontScale > 1.3f)
@@ -51,7 +51,7 @@ internal fun MapPlaceSheet(selected: MapLocation, saved: Place?, model: MapViewM
     // The visible surface itself is bounded. Its bottom corners must not belong
     // to a taller, clipped sheet. The scaffold's outer anchor wrapper stays fixed.
     Surface(color = Color.Transparent, modifier = Modifier.fillMaxWidth().testTag("map-card-surround")) {
-        GlassSurface(Modifier.fillMaxWidth().padding(horizontal = 12.dp).height(height.coerceAtLeast(1.dp)).testTag("map-place-card"),
+        GlassSurface(Modifier.fillMaxWidth().height(height.coerceAtLeast(1.dp)).testTag("map-place-card"),
             kind = GlassKind.Details, shape = RoundedCornerShape(28.dp)) {
             Column(Modifier.fillMaxSize()) {
                 Column(Modifier.weight(1f).fillMaxWidth().testTag("map-place-content")) {
@@ -64,9 +64,10 @@ internal fun MapPlaceSheet(selected: MapLocation, saved: Place?, model: MapViewM
                                 Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
                                     GoogleMapsAttribution(Modifier.padding(4.dp))
                                 }
-                                if (saved == null && pinnedSave) {
+                                if (pinnedSave) {
                                     Spacer(Modifier.width(8.dp))
-                                    if (compactSave) PlaceSaveIcon(state.busy, save) else PlaceSaveButton(state.busy, save, "Save")
+                                    val action = { if (saved != null) unsave(saved) else save() }
+                                    if (compactSave) PlaceSaveIcon(state.busy, saved != null, action) else PlaceSaveButton(state.busy, saved != null, action)
                                 }
                                 PlaceSheetControls(expanded, toggle, model::dismissSelection)
                                 if (expanded) appearance?.invoke()
@@ -90,17 +91,17 @@ internal fun MapPlaceSheet(selected: MapLocation, saved: Place?, model: MapViewM
                                         maxLines = if (expanded) Int.MAX_VALUE else 1, overflow = TextOverflow.Ellipsis) }
                                 }
                             }
-                            if (!expanded && !pinnedSave && saved == null) {
+                            if (!expanded && !pinnedSave) {
                                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                     Box(Modifier.weight(1f)) { if (localPhoto.isBlank()) PhotoCredits(thumbnail, horizontal = true) }
-                                    PlaceSaveButton(state.busy, save, "Save")
+                                    PlaceSaveButton(state.busy, saved != null) { if (saved != null) unsave(saved) else save() }
                                 }
                             } else if (localPhoto.isBlank()) PhotoCredits(thumbnail, horizontal = true)
                         }
                         if (expanded) Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            PlaceActions(selected, state.details, saved != null, state.busy, save)
+                            PlaceActions(selected, state.details, saved != null, state.busy) { if (saved != null) unsave(saved) else save() }
                             if (localPhoto.isNotBlank()) PlaceImage(localPhoto, null, selected.name, Modifier.fillMaxWidth().height(160.dp))
                             if (state.detailsBusy) { LinearProgressIndicator(Modifier.fillMaxWidth()); Text("Loading place details…") }
                             state.detailsMessage?.let { message ->
@@ -168,24 +169,24 @@ private fun SheetHandle() {
 
 @Composable
 private fun RowScope.PlaceSheetControls(expanded: Boolean, toggle: () -> Unit, close: () -> Unit) {
-    FilledTonalIconButton(onClick = toggle, modifier = Modifier.size(48.dp), colors = IconButtonDefaults.filledTonalIconButtonColors(containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.75f))) { Icon(if (expanded) Icons.Default.ExpandMore else Icons.Default.ExpandLess,
-        if (expanded) "Collapse place details" else "Expand place details", Modifier.size(26.dp)) }
-    FilledTonalIconButton(onClick = close, modifier = Modifier.size(48.dp), colors = IconButtonDefaults.filledTonalIconButtonColors(containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.75f))) { Icon(Icons.Default.Close, "Close place", Modifier.size(26.dp)) }
+    GlassIconButton(if (expanded) Icons.Default.ExpandMore else Icons.Default.ExpandLess,
+        if (expanded) "Collapse place details" else "Expand place details", click = toggle)
+    Spacer(Modifier.width(4.dp))
+    GlassIconButton(Icons.Default.Close, "Close place", click = close)
 }
 
 @Composable
-private fun PlaceSaveIcon(busy: Boolean, save: () -> Unit) {
+private fun PlaceSaveIcon(busy: Boolean, saved: Boolean, save: () -> Unit) {
     FilledIconButton(onClick = save, enabled = !busy,
-        modifier = Modifier.size(48.dp).testTag("map-save"), shape = RoundedCornerShape(16.dp)) {
-        Icon(Icons.Outlined.BookmarkBorder, "Save place", Modifier.size(26.dp))
+        modifier = Modifier.size(48.dp).testTag(if (saved) "map-saved-status" else "map-save"), shape = RoundedCornerShape(16.dp)) {
+        Icon(if (saved) Icons.Default.Bookmark else Icons.Outlined.BookmarkBorder, if (saved) "Unsave place" else "Save place", Modifier.size(26.dp))
     }
 }
 
 @Composable
-private fun PlaceSaveButton(busy: Boolean, save: () -> Unit, label: String) {
-    Button(onClick = save, enabled = !busy, shape = RoundedCornerShape(20.dp), modifier = Modifier.heightIn(min = 48.dp).testTag("map-save")) {
-        Icon(Icons.Outlined.BookmarkBorder, null, Modifier.size(26.dp)); Spacer(Modifier.width(6.dp)); Text(label, style = MaterialTheme.typography.bodyLarge)
-    }
+private fun PlaceSaveButton(busy: Boolean, saved: Boolean, save: () -> Unit) {
+    GlassAction(if (saved) "Saved" else "Save", if (saved) Icons.Default.Bookmark else Icons.Outlined.BookmarkBorder,
+        modifier = Modifier.testTag(if (saved) "map-saved-status" else "map-save"), enabled = !busy, emphasized = true, click = save)
 }
 
 @Composable
@@ -198,7 +199,7 @@ private fun PlaceActions(place: MapLocation, details: PlaceDetails?, saved: Bool
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).testTag("map-place-actions"), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         GlassAction(if (saved) "Saved" else "Save", if (saved) Icons.Default.Bookmark else Icons.Outlined.BookmarkBorder,
             vertical = true, modifier = Modifier.testTag(if (saved) "map-saved-status" else "map-save"),
-            enabled = !saved && !busy, emphasized = !saved, click = save)
+            enabled = !busy, emphasized = true, click = save)
         GlassAction("Directions", Icons.Outlined.NearMe, vertical = true, modifier = Modifier.testTag("map-directions")) { open(Intent(Intent.ACTION_VIEW, PlaceLinks.directions(place))) }
         GlassAction("Share", Icons.Outlined.Share, vertical = true) {
             open(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, PlaceLinks.view(place).toString()), "Share place"))

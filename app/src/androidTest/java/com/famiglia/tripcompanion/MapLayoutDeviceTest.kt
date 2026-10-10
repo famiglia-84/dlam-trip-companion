@@ -355,6 +355,14 @@ class MapLayoutDeviceTest {
         val card = compose.onNodeWithTag("map-place-card").fetchSemanticsNode().boundsInRoot
         assertEquals("Expanded card must completely cover the search/toolbar", root.top, card.top, 1f)
         assertEquals(root.bottom, card.bottom, 1f)
+        // At this point the previous 24 dp map corner was visible outside the
+        // card's 28 dp corner. A shared clip must reveal only the outer backdrop.
+        val cornerPixels = compose.onNodeWithTag("map-layout").captureToImage().toPixelMap()
+        val outside = cornerPixels[1, 10]
+        val corner = cornerPixels[(card.left - root.left).toInt() + 4, 10]
+        assertEquals("Map must not peek through outside the expanded card corner", outside.red, corner.red, 0.02f)
+        assertEquals(outside.green, corner.green, 0.02f)
+        assertEquals(outside.blue, corner.blue, 0.02f)
         val toolbar = compose.onNodeWithTag("place-details-toolbar").fetchSemanticsNode().boundsInRoot
         assertTrue("Expanded toolbar should be slim", toolbar.height <= 80f)
         compose.onNodeWithContentDescription("Google Maps").assertIsDisplayed()

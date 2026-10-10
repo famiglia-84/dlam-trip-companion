@@ -59,7 +59,7 @@ import com.famiglia.tripcompanion.maps.MapViewModel
 internal fun MapLayout(
     model: MapViewModel, places: List<Place>, scopeId: Long?, save: (String, String, String) -> Unit,
     modifier: Modifier = Modifier, mapSlow: Boolean = false, appearance: (@Composable () -> Unit)? = null,
-    bottomOverlay: Dp = 0.dp,
+    bottomOverlay: Dp = 0.dp, unsave: (Place) -> Unit = {},
     map: @Composable (Modifier, PaddingValues) -> Unit,
 ) {
     val state by model.state.collectAsStateWithLifecycle()
@@ -133,7 +133,8 @@ internal fun MapLayout(
             .coerceAtMost((rootHeight - topInset - 48.dp).coerceAtLeast(8.dp))
         // The map must be INSIDE the scaffold surface. A transparent full-screen surface
         // placed above a sibling Android View still intercepts its touch hit testing.
-        Box(Modifier.fillMaxSize().testTag("map-sheet-viewport")) {
+        Box(Modifier.fillMaxSize().testTag("map-sheet-viewport").padding(horizontal = 12.dp)
+            .clip(RoundedCornerShape(28.dp))) {
             BottomSheetScaffold(
                 scaffoldState = sheetScaffold,
                 sheetPeekHeight = if (state.selected == null) 0.dp else peek + footer, sheetDragHandle = null,
@@ -150,6 +151,7 @@ internal fun MapLayout(
                                     covered + footer, shortWindow, sheetExpanded, bottomClearance = footer,
                                     toggle = { scope.launch { if (sheetExpanded) sheet.partialExpand() else sheet.expand() } },
                                     save = { dismissKeyboard(); save(selected.id, selected.name.ifBlank { "Saved place" }, selected.address) },
+                                    unsave = unsave,
                                     appearance = appearance, compactHeight = { compactHeight = it })
                             } ?: Spacer(Modifier.height(1.dp)) }
                         }
@@ -162,9 +164,9 @@ internal fun MapLayout(
                     // Render once, behind the floating toolbar, sheet and navigation dock. SDK insets protect
                     // the attribution, zoom controls and camera focus from all of these overlays.
                     Box(Modifier.fillMaxSize().testTag("map-viewport")) {
-                        Surface(Modifier.fillMaxSize().padding(horizontal = 12.dp).testTag("map-frame"),
-                            shape = RoundedCornerShape(24.dp), border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f))) {
-                            map(Modifier.fillMaxSize().clip(RoundedCornerShape(24.dp))
+                        Surface(Modifier.fillMaxSize().testTag("map-frame"),
+                            shape = RoundedCornerShape(28.dp), border = if (detailsExpanded) null else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f))) {
+                            map(Modifier.fillMaxSize().clip(RoundedCornerShape(28.dp))
                                 .then(if (detailsExpanded) Modifier.clearAndSetSemantics { } else Modifier),
                                 if (detailsExpanded) PaddingValues(8.dp) else PaddingValues(start = 8.dp, top = topInset, end = 8.dp, bottom = bottomInset))
                         }
@@ -174,16 +176,16 @@ internal fun MapLayout(
                         if (!expandedMap) MapControls(query, model::changeQuery, !state.busy, shortWindow,
                             ::search, ::savedPlaces, { dismissKeyboard(); showInfo = true }, ::expand, appearance)
                         val message = state.message ?: if (mapSlow) "The map has not loaded. Check your connection and Maps configuration, then reopen this screen." else null
-                        if (message != null) GlassSurface(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
+                        if (message != null) GlassSurface(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                             Text(message, Modifier.padding(12.dp).testTag("map-message"), style = MaterialTheme.typography.bodySmall)
                         }
-                        if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 12.dp))
+                        if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
                         val credits = (state.pins + listOfNotNull(state.selected)).flatMap(MapLocation::attributions).distinct()
-                        if (credits.isNotEmpty()) Surface(Modifier.padding(horizontal = 12.dp), shape = RoundedCornerShape(12.dp)) {
+                        if (credits.isNotEmpty()) Surface(shape = RoundedCornerShape(12.dp)) {
                             PlaceAttributions(credits)
                         }
                     }
-                    if (expandedMap) GlassSurface(Modifier.align(Alignment.TopEnd).padding(24.dp)
+                    if (expandedMap) GlassSurface(Modifier.align(Alignment.TopEnd).padding(horizontal = 12.dp, vertical = 24.dp)
                         .graphicsLayer { alpha = if (detailsExpanded) 0f else 1f }) {
                         Row {
                             IconButton(onClick = { expandedMap = false }) { Icon(Icons.Default.Search, "Show search controls") }
@@ -192,7 +194,7 @@ internal fun MapLayout(
                         }
                     }
                     if (state.suggestions.isNotEmpty()) GlassSurface(
-                        Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(horizontal = 12.dp)
+                        Modifier.align(Alignment.TopCenter).fillMaxWidth()
                             .padding(top = controlsTop + 4.dp).testTag("map-results"),
                         kind = GlassKind.Details, shape = RoundedCornerShape(20.dp),
                     ) {
@@ -222,7 +224,7 @@ private fun MapControls(query: String, changeQuery: (String) -> Unit, enabled: B
     search: () -> Unit, savedPlaces: () -> Unit, information: () -> Unit, expand: () -> Unit,
     appearance: (@Composable () -> Unit)?) {
     var showOptions by remember { mutableStateOf(false) }
-    Column(Modifier.fillMaxWidth().testTag("map-controls").padding(horizontal = 20.dp, vertical = 8.dp)) {
+    Column(Modifier.fillMaxWidth().testTag("map-controls").padding(horizontal = 8.dp, vertical = 8.dp)) {
         GlassSurface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp)) {
             BoxWithConstraints(Modifier.fillMaxWidth().testTag("map-toolbar")) {
                 val separateActions = !shortWindow && maxWidth >= 344.dp && LocalDensity.current.fontScale <= 1.3f

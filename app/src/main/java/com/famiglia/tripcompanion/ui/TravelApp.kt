@@ -176,8 +176,9 @@ fun TravelApp(model: TravelViewModel) {
                         composable("maps") {
                             MapPane(maps, data.places, null, ::saveMapPlace, requestedPlaceId = requestedMapPlace,
                                 consumedRequest = { requestedMapPlace = null }, appearance = {
-                                    IconButton(onClick = model::cycleTheme) { Icon(Icons.Default.DarkMode, "Theme: $theme. Change appearance", Modifier.size(26.dp)) }
-                                }, bottomOverlay = if (mapBehindDock) padding.calculateBottomPadding() else 0.dp)
+                                    GlassIconButton(Icons.Default.DarkMode, "Theme: $theme. Change appearance", click = model::cycleTheme)
+                                }, bottomOverlay = if (mapBehindDock) padding.calculateBottomPadding() else 0.dp,
+                                unsave = { remove("map-place", it.id) })
                         }
                     }
                 }
@@ -198,11 +199,13 @@ fun TravelApp(model: TravelViewModel) {
             }
             if (deletion.isNotBlank()) AlertDialog(
                 onDismissRequest = { deletion = "" },
-                title = { Text("Delete ${if (deletion == "day") "day plan" else deletion}?") },
+                title = { Text(if (deletion == "map-place") "Remove ${data.places.firstOrNull { it.id == deletionId }?.name ?: "this place"} from saved places?"
+                    else "Delete ${if (deletion == "day") "day plan" else deletion}?") },
                 text = { Text(when (deletion) {
                     "trip" -> "This removes the trip, its reservations and all its day plans. Saved places stay in your global list. This cannot be undone."
                     "day" -> "This removes the day plan and all its activities. This cannot be undone."
                     "place" -> "This removes the saved place. Existing itinerary activities and their notes are kept. This cannot be undone."
+                    "map-place" -> "This removes this saved entry, including its notes and trip assignment. Your itinerary activities and their notes are kept, but their link to this saved place is removed. This cannot be undone."
                     else -> "This removes the item from your trip. This cannot be undone."
                 }) },
                 confirmButton = { TextButton(onClick = {
@@ -212,13 +215,13 @@ fun TravelApp(model: TravelViewModel) {
                         when (kind) {
                             "trip" -> data.trips.firstOrNull { it.id == id }?.let { model.delete(it); if (selected == id) model.selectTrip(null) }
                             "reservation" -> data.reservations.firstOrNull { it.id == id }?.let { model.delete(it) }
-                            "place" -> data.places.firstOrNull { it.id == id }?.let { model.delete(it) }
+                            "place", "map-place" -> data.places.firstOrNull { it.id == id }?.let { model.delete(it) }
                             "day" -> data.plans.firstOrNull { it.id == id }?.let { model.delete(it) }
                             "activity" -> data.activities.firstOrNull { it.id == id }?.let { model.delete(it) }
                         }
                     }
                     deletion = ""
-                }) { Text("Delete", color = MaterialTheme.colorScheme.error) } },
+                }) { Text(if (deletion == "map-place") "Remove" else "Delete", color = MaterialTheme.colorScheme.error) } },
                 dismissButton = { TextButton(onClick = { deletion = "" }) { Text("Keep it") } },
             )
         }
@@ -293,7 +296,8 @@ private fun TripDetails(trip: Trip, data: TravelData, section: String, sectionCh
             Sections.forEach { value -> Tab(selected = section == value, onClick = { sectionChange(value) }, text = { Text(value) }) }
         }
         if (section == "Map") {
-            MapPane(maps, data.places.filter { it.tripId == trip.id }, trip.id, saveMapPlace, Modifier.weight(1f))
+            MapPane(maps, data.places.filter { it.tripId == trip.id }, trip.id, saveMapPlace, Modifier.weight(1f),
+                unsave = { remove("map-place", it.id) })
             return@Column
         }
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {

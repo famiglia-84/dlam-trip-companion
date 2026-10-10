@@ -4,14 +4,20 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
@@ -51,15 +57,27 @@ internal fun GlassSurface(
     ))
     Surface(modifier, shape = shape, color = Color.Transparent, contentColor = colors.onSurface,
         border = BorderStroke(1.dp, rim), shadowElevation = if (kind == GlassKind.Control) 6.dp else 2.dp) {
-        Box(Modifier.background(fill), propagateMinConstraints = true) { content() }
+        Box(Modifier.background(fill).drawWithCache {
+            val strength = when (kind) { GlassKind.Control -> 0.14f; GlassKind.Dock -> 0.09f; GlassKind.Card -> 0.07f; GlassKind.Details -> 0.035f }
+            val sheen = Brush.linearGradient(
+                0f to Color.White.copy(alpha = strength),
+                0.28f to Color.White.copy(alpha = strength * 0.35f),
+                0.48f to Color.Transparent,
+                1f to colors.primary.copy(alpha = strength * 0.18f),
+                start = Offset.Zero, end = Offset(size.width, size.height.coerceAtLeast(1f)),
+            )
+            onDrawBehind { drawRect(sheen) }
+        }, propagateMinConstraints = true) { content() }
     }
 }
 
 @Composable
 internal fun GlassAction(label: String, icon: ImageVector, modifier: Modifier = Modifier,
     vertical: Boolean = false, enabled: Boolean = true, emphasized: Boolean = false, click: () -> Unit) {
-    GlassSurface(modifier.clickable(enabled = enabled, role = Role.Button, onClick = click),
-        shape = RoundedCornerShape(16.dp), focused = emphasized) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    GlassSurface(modifier.clickable(enabled = enabled, role = Role.Button, interactionSource = interaction,
+        indication = ripple(), onClick = click), shape = RoundedCornerShape(16.dp), focused = emphasized || pressed) {
         if (vertical) Column(Modifier.widthIn(min = 104.dp).heightIn(min = 76.dp).padding(12.dp),
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically)) {
             Icon(icon, null, Modifier.size(26.dp), tint = MaterialTheme.colorScheme.primary)
@@ -70,6 +88,17 @@ internal fun GlassAction(label: String, icon: ImageVector, modifier: Modifier = 
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Icon(icon, null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)
             Text(label, style = MaterialTheme.typography.bodyLarge)
+        }
+    }
+}
+
+@Composable
+internal fun GlassIconButton(icon: ImageVector, description: String, modifier: Modifier = Modifier, click: () -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    GlassSurface(modifier.size(48.dp), shape = RoundedCornerShape(24.dp), focused = pressed) {
+        IconButton(onClick = click, interactionSource = interaction, modifier = Modifier.fillMaxSize()) {
+            Icon(icon, description, Modifier.size(26.dp))
         }
     }
 }

@@ -1,5 +1,11 @@
 # Google Maps and place search
 
+Version 0.6.6 makes Saved actionable in compact and expanded map cards. It opens a named removal confirmation; Keep it leaves the record intact. Confirming removes only that saved entry, including its own notes and trip assignment. Existing day plans, activity titles/times and activity notes remain, with the removed place link cleared by the database. The card stays open and returns to Save when no other matching saved entry remains. This uses the existing local deletion flow on both the main and trip maps; no schema migration is needed.
+
+The map and sheet share a single 28 dp rounded outer clip and identical horizontal bounds. Expanded cards cover the map's border, eliminating competing corner outlines. The native map stays inside the sheet scaffold, and its padding, fixed gesture anchors and navigation clearance are retained. Toolbar/search and navigation still align at a 20 dp inset.
+
+Glass surfaces have a restrained diagonal sheen over their existing readable tint. Minimise, close and the main-map theme control use matching outlined glass circles with 48 dp targets; action tiles brighten when pressed. Save and Saved keep a mint accent and distinct outlined/filled bookmarks. These are lightweight Compose effects with no backdrop snapshots, live blur, extra Google requests or new dependency.
+
 Version 0.6.5 insets the floating bottom navigation by 20 dp on each side, matching the Saved places toolbar and search bar on the main Map screen. The map and card keep their wider frame, with their surfaces visible around the dock. Navigation height and card content clearance continue to adapt to the available width and text size.
 
 Version 0.6.4 removes the solid green footer behind the floating navigation on the main Map screen. The map is visible in the dock's surrounding gaps when no place is selected. With a selection, the card's surface extends to the bottom behind the dock, while its information and scrollable body retain their previous clearance above navigation. SDK content padding still keeps the map's Google logo and zoom controls in the uncovered area. The renderer and fixed sheet anchors are retained, including swipe dismissal and Back behavior.
