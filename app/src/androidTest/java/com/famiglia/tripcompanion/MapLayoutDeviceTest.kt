@@ -214,7 +214,7 @@ class MapLayoutDeviceTest {
         assertTrue("Map taps must not save records", saved.isEmpty())
     }
 
-    @Test fun searchResultsOverlayTheMapAndSelectionKeepsSaveVisibleWithUniformPadding() {
+    @Test fun searchResultsOverlayTheMapAndSelectionKeepsABoundedContentSizedSummary() {
         searchForBari(useKeyboard = false)
         // Compare sibling bounds in the same layout, rather than an earlier IME/window size.
         val searchRoot = compose.onNodeWithTag("map-layout").fetchSemanticsNode().boundsInRoot
@@ -255,10 +255,16 @@ class MapLayoutDeviceTest {
         // sizes; the previous screen percentage assumed the smaller, text-only card.
         assertTrue("Photo summary must leave at least 280 dp for map interaction: root=$root, safe=$safeMap", safeMap.height >= 280f)
         assertEquals(safeMap.bottom + 8f, surround.top, 1f)
-        assertEquals(card.left - surround.left, card.top - surround.top, 1f)
+        assertEquals("Card must start at the sheet edge", surround.top, card.top, 1f)
+        val selectedFrame = compose.onNodeWithTag("map-frame").fetchSemanticsNode().boundsInRoot
+        assertEquals(selectedFrame.left, card.left, 1f)
+        assertEquals(selectedFrame.right, card.right, 1f)
+        assertTrue("Summary should fit its content, not leave a large empty panel", card.height < 280f)
         assertEquals(root.bottom, map.bottom, 1f)
-        assertTrue(compose.onNodeWithTag("map-save").fetchSemanticsNode().boundsInRoot.bottom <=
+        val saveButton = compose.onNodeWithTag("map-save").fetchSemanticsNode().boundsInRoot
+        assertTrue("Compact Save belongs beside/below the summary", saveButton.top >=
             compose.onNodeWithTag("place-detail-name").fetchSemanticsNode().boundsInRoot.top)
+        assertTrue("Content-sized card must include the Save target", saveButton.bottom <= card.bottom)
         val thumbnail = compose.onNodeWithTag("map-place-thumbnail").fetchSemanticsNode().boundsInRoot
         val heading = compose.onNodeWithTag("place-detail-name").fetchSemanticsNode().boundsInRoot
         assertTrue("Place text must sit beside the rounded thumbnail", heading.left >= thumbnail.right + 16f)
@@ -341,7 +347,7 @@ class MapLayoutDeviceTest {
         assertEquals(addressBefore.top - nameBefore.top, addressAfter.top - nameAfter.top, 1f)
         val root = compose.onNodeWithTag("map-layout").fetchSemanticsNode().boundsInRoot
         val card = compose.onNodeWithTag("map-place-card").fetchSemanticsNode().boundsInRoot
-        assertEquals(root.top + 12f, card.top, 1f)
+        assertEquals("Expanded card must completely cover the search/toolbar", root.top, card.top, 1f)
         assertEquals(root.bottom - 12f, card.bottom, 1f)
         val toolbar = compose.onNodeWithTag("place-details-toolbar").fetchSemanticsNode().boundsInRoot
         assertTrue("Expanded toolbar should be slim", toolbar.height <= 80f)
@@ -416,7 +422,57 @@ class MapLayoutDeviceTest {
         compose.onNodeWithTag("map-save").assertDoesNotExist()
     }
 
+    @Test fun handleCanCollapseThenDismissAndTheNextSelectionStartsCompact() {
+        selectPlace()
+        val compact = compose.onNodeWithTag("map-card-surround").fetchSemanticsNode().boundsInRoot
+        compose.onNodeWithContentDescription("Expand place details").performClick()
+        val root = compose.onRoot().fetchSemanticsNode().boundsInRoot
+        val handle = compose.onNodeWithTag("place-sheet-handle").fetchSemanticsNode().boundsInRoot
+        compose.onRoot().performTouchInput {
+            swipe(Offset(handle.center.x - root.left, handle.center.y - root.top),
+                Offset(handle.center.x - root.left, compact.top + 8f - root.top), durationMillis = 900)
+        }
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("map-place-details").fetchSemanticsNodes().isEmpty() }
+        compose.onNodeWithContentDescription("Expand place details").assertIsDisplayed()
+        val collapsedHandle = compose.onNodeWithTag("place-sheet-handle").fetchSemanticsNode().boundsInRoot
+        val mapRoot = compose.onNodeWithTag("map-layout").fetchSemanticsNode().boundsInRoot
+        compose.onRoot().performTouchInput {
+            swipe(Offset(collapsedHandle.center.x - root.left, collapsedHandle.center.y - root.top),
+                Offset(collapsedHandle.center.x - root.left, mapRoot.bottom - root.top - 4f), durationMillis = 700)
+        }
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("map-place-card").fetchSemanticsNodes().isEmpty() }
+        compose.onNodeWithTag("map-search").assertIsDisplayed()
+        touchMapControls()
+        assertTrue("Dismissing a selection must not modify saved places", saved.isEmpty())
+        compose.runOnIdle { model.select("museum-id") }
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("map-save").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithContentDescription("Expand place details").assertIsDisplayed()
+        compose.onNodeWithTag("map-place-details").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Expand place details").performClick()
+        val expandedHandle = compose.onNodeWithTag("place-sheet-handle").fetchSemanticsNode().boundsInRoot
+        compose.onRoot().performTouchInput {
+            swipe(Offset(expandedHandle.center.x - root.left, expandedHandle.center.y - root.top),
+                Offset(expandedHandle.center.x - root.left, mapRoot.bottom - root.top - 4f), durationMillis = 700)
+        }
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("map-place-card").fetchSemanticsNodes().isEmpty() }
+        compose.onNodeWithTag("map-search").assertIsDisplayed()
+    }
+
+    @Test fun placesWithoutProviderDetailsShowOneQuietMessageInsteadOfEmptySections() {
+        lookup.limitedDetails = true
+        selectPlace()
+        compose.onNodeWithContentDescription("Expand place details").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("Limited details available for this place.").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("Limited details available for this place.").assertIsDisplayed()
+        compose.onNodeWithText("Opening status unavailable").assertDoesNotExist()
+        compose.onNodeWithText("Opening hours unavailable.").assertDoesNotExist()
+        compose.onNodeWithText("No photos available.").assertDoesNotExist()
+        compose.onNodeWithText("Opening hours").assertDoesNotExist()
+        compose.onNodeWithText("Refresh details").assertIsDisplayed()
+    }
+
     private class FakePlaces : PlaceLookup {
+        var limitedDetails = false
         val searches = mutableListOf<String>()
         val richCalls = mutableListOf<String>()
         val photoCalls = mutableListOf<String>()
@@ -427,6 +483,7 @@ class MapLayoutDeviceTest {
         }
         override suspend fun moreDetails(id: String): PlaceDetails {
             richCalls += id
+            if (limitedDetails) return PlaceDetails()
             return PlaceDetails(photos = listOf(PlacePhoto("content://com.famiglia.tripcompanion.test/preview")), rating = 4.5, ratingCount = 12, openNow = true,
                 // Multiple daily service windows exercise wrapped hours and guarantee real scroll overflow.
                 hours = listOf("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")

@@ -38,7 +38,7 @@ internal fun PlaceImage(localUri: String, photo: PlacePhoto?, name: String, modi
     var failed by remember(source) { mutableStateOf(false) }
     var loaded by remember(source) { mutableStateOf(false) }
     Box(modifier.clip(RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) {
-        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.secondaryContainer) {
+        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)) {
             Box(contentAlignment = Alignment.Center) {
                 val icon = when (category) {
                     PlaceCategory.RESTAURANT.name -> Icons.Default.Restaurant
@@ -47,7 +47,7 @@ internal fun PlaceImage(localUri: String, photo: PlacePhoto?, name: String, modi
                     PlaceCategory.LANDMARK.name -> Icons.Default.AccountBalance
                     else -> Icons.Default.Place
                 }
-                Icon(icon, null, tint = MaterialTheme.colorScheme.onSecondaryContainer)
+                Icon(icon, null, modifier = Modifier.size(28.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         if (source != null && !failed) AsyncImage(

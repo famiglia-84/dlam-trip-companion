@@ -101,7 +101,13 @@ class SavedPlacesDeviceTest {
         assertTrue("SDK controls must remain above navigation and the place card", safeMap.bottom < card.top)
         assertTrue("The card must not cover navigation: card=$card, dock=$dock", card.bottom <= dock.top)
         val backdrop = compose.onNodeWithTag("map-lower-backdrop").fetchSemanticsNode().boundsInRoot
-        assertTrue("Opaque surround must join the card to the dock", backdrop.top < card.bottom && backdrop.bottom > dock.top)
+        assertTrue("Opaque surround must join the card to the dock", backdrop.top <= card.bottom + 1f && backdrop.bottom > dock.top)
+        val selectedTab = compose.onNodeWithTag("dock-item-map").assertIsSelected().fetchSemanticsNode().boundsInRoot
+        val tabIcon = compose.onNodeWithTag("dock-item-map-icon", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        val tabLabel = compose.onNodeWithTag("dock-item-map-label", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        assertEquals(28f, tabIcon.height, 1f)
+        assertTrue("Selected capsule must contain both icon and label", selectedTab.top < tabIcon.top && selectedTab.bottom > tabLabel.bottom)
+        assertTrue("The dock must remain a generous touch target", selectedTab.height >= 72f)
         val toolbar = compose.onNodeWithTag("map-toolbar").fetchSemanticsNode().boundsInRoot
         assertTrue(toolbar.bottom <= compose.onNodeWithTag("map-search").fetchSemanticsNode().boundsInRoot.top)
         val themeAction = hasContentDescription("Change appearance", substring = true)

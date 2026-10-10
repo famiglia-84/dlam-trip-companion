@@ -3,17 +3,22 @@ package com.famiglia.tripcompanion.ui
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 
 internal enum class GlassKind { Control, Card, Details, Dock }
@@ -51,13 +56,36 @@ internal fun GlassSurface(
 }
 
 @Composable
-internal fun GlassAction(label: String, icon: ImageVector, click: () -> Unit) {
+internal fun GlassAction(label: String, icon: ImageVector, vertical: Boolean = false, click: () -> Unit) {
     GlassSurface(Modifier.clickable(role = Role.Button, onClick = click), shape = RoundedCornerShape(16.dp)) {
+        if (vertical) Column(Modifier.widthIn(min = 104.dp).heightIn(min = 76.dp).padding(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically)) {
+            Icon(icon, null, Modifier.size(26.dp), tint = MaterialTheme.colorScheme.primary)
+            Text(label, style = MaterialTheme.typography.bodyLarge)
+        } else
         Row(Modifier.heightIn(min = 48.dp).padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Icon(icon, null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)
             Text(label, style = MaterialTheme.typography.bodyLarge)
         }
+    }
+}
+
+/** One selected capsule contains the icon AND label; every tab keeps equal space. */
+@Composable
+internal fun RowScope.GlassNavigationItem(label: String, icon: ImageVector, selected: Boolean, tag: String, click: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(26.dp)
+    val fill = if (selected) Brush.verticalGradient(listOf(colors.secondaryContainer, colors.secondaryContainer.copy(alpha = 0.85f)))
+        else Brush.verticalGradient(listOf(Color.Transparent, Color.Transparent))
+    Column(Modifier.weight(1f).fillMaxHeight().heightIn(min = 72.dp).clip(shape)
+        .background(fill).then(if (selected) Modifier.border(1.dp, colors.outline.copy(alpha = 0.45f), shape) else Modifier)
+        .selectable(selected = selected, role = Role.Tab, onClick = click).testTag(tag)
+        .padding(horizontal = 4.dp, vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterVertically)) {
+        Icon(icon, null, Modifier.size(28.dp).testTag("$tag-icon"), tint = if (selected) colors.primary else colors.onSurface)
+        Text(label, Modifier.testTag("$tag-label"), style = MaterialTheme.typography.labelLarge, textAlign = TextAlign.Center, maxLines = 2,
+            color = if (selected) colors.onSecondaryContainer else colors.onSurface)
     }
 }
 

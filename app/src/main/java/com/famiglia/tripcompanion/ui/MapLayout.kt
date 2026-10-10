@@ -20,6 +20,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -27,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.toArgb
@@ -82,17 +85,24 @@ internal fun MapLayout(
         return
     }
 
-    val sheet = rememberStandardBottomSheetState(initialValue = SheetValue.PartiallyExpanded)
+    val sheet = rememberStandardBottomSheetState(initialValue = SheetValue.PartiallyExpanded, skipHiddenState = false)
     val sheetScaffold = rememberBottomSheetScaffoldState(bottomSheetState = sheet)
     val scope = rememberCoroutineScope()
     val sheetExpanded = sheet.currentValue == SheetValue.Expanded || sheet.targetValue == SheetValue.Expanded
     LaunchedEffect(state.selected?.id) {
-        if (state.selected == null) {
+        if (state.selected == null || sheet.currentValue == SheetValue.Hidden) {
             if (sheet.currentValue != SheetValue.PartiallyExpanded || sheet.targetValue != SheetValue.PartiallyExpanded)
                 sheet.partialExpand()
         }
     }
-    BackHandler(enabled = state.selected != null && sheetExpanded) { scope.launch { sheet.partialExpand() } }
+    // Hidden is a real third anchor: dismiss the selection after a downward gesture
+    // settles there. It never removes the user's saved place.
+    LaunchedEffect(sheet.currentValue) {
+        if (sheet.currentValue == SheetValue.Hidden) model.dismissSelection()
+    }
+    BackHandler(enabled = state.selected != null) {
+        if (sheetExpanded) scope.launch { sheet.partialExpand() } else model.dismissSelection()
+    }
     LaunchedEffect(state.selected?.id, sheetExpanded) { if (sheetExpanded) model.loadDetails() }
 
     BoxWithConstraints(modifier.fillMaxSize().imePadding().testTag("map-layout")) {
@@ -100,12 +110,11 @@ internal fun MapLayout(
         val footer = minOf(bottomOverlay + 12.dp, rootHeight)
         val sheetHeight = (rootHeight - footer).coerceAtLeast(1.dp)
         val shortWindow = sheetHeight < 420.dp
-        val desiredPeek = if (state.selected == null) 0.dp else minOf(sheetHeight,
-            if (shortWindow) {
-                if (LocalDensity.current.fontScale > 1.3f) 264.dp else 224.dp
-            } else if (LocalDensity.current.fontScale > 1.3f) 384.dp
-            else if (places.any { it.googlePlaceId == state.selected?.id }) 320.dp else 288.dp)
         val density = LocalDensity.current
+        var compactHeight by remember(state.selected?.id, maxWidth, density.fontScale) { mutableIntStateOf(0) }
+        val desiredPeek = if (state.selected == null) 0.dp else minOf(sheetHeight,
+            if (compactHeight > 0) with(density) { compactHeight.toDp() }
+            else if (density.fontScale > 1.3f) 320.dp else 256.dp)
         var controlsHeight by remember { mutableIntStateOf(0) }
         val controlsTop = with(density) { controlsHeight.toDp() }
         // Leave a usable map area above the summary even in split screen with larger text.
@@ -136,10 +145,10 @@ internal fun MapLayout(
                         Box(Modifier.fillMaxWidth().height(covered).clipToBounds()) {
                             key(state.selected?.id) { state.selected?.let { selected ->
                                 MapPlaceSheet(selected, places.firstOrNull { it.googlePlaceId == selected.id }, model, state,
-                                    sheetHeight, shortWindow, sheetExpanded,
+                                    covered, shortWindow, sheetExpanded,
                                     toggle = { scope.launch { if (sheetExpanded) sheet.partialExpand() else sheet.expand() } },
                                     save = { dismissKeyboard(); save(selected.id, selected.name.ifBlank { "Saved place" }, selected.address) },
-                                    appearance = appearance)
+                                    appearance = appearance, compactHeight = { compactHeight = it })
                             } ?: Spacer(Modifier.height(1.dp)) }
                         }
                         Spacer(Modifier.height(footer))
@@ -159,12 +168,14 @@ internal fun MapLayout(
                                 if (detailsExpanded) PaddingValues(8.dp) else PaddingValues(start = 8.dp, top = topInset, end = 8.dp, bottom = bottomInset))
                         }
                     }
-                    // Draw only in the covered lower area. A full-screen Surface here would
+                    // Join the card to the dock without painting over the map at its corners.
+                    // Draw only below the card. A full-screen Surface here would
                     // block native map gestures even when its fill were transparent.
                     Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth()
-                        .height(minOf(rootHeight, footer + covered))
+                        .height(footer)
                         .background(mapLowerBackdrop()).testTag("map-lower-backdrop"))
-                    Column(Modifier.fillMaxWidth().onSizeChanged { controlsHeight = it.height }) {
+                    Column(Modifier.fillMaxWidth().onSizeChanged { controlsHeight = it.height }
+                        .graphicsLayer { alpha = if (detailsExpanded) 0f else 1f }) {
                         if (!expandedMap) MapControls(query, model::changeQuery, !state.busy, shortWindow,
                             ::search, ::savedPlaces, { dismissKeyboard(); showInfo = true }, ::expand, appearance)
                         val message = state.message ?: if (mapSlow) "The map has not loaded. Check your connection and Maps configuration, then reopen this screen." else null
@@ -177,7 +188,8 @@ internal fun MapLayout(
                             PlaceAttributions(credits)
                         }
                     }
-                    if (expandedMap) GlassSurface(Modifier.align(Alignment.TopEnd).padding(24.dp)) {
+                    if (expandedMap) GlassSurface(Modifier.align(Alignment.TopEnd).padding(24.dp)
+                        .graphicsLayer { alpha = if (detailsExpanded) 0f else 1f }) {
                         Row {
                             IconButton(onClick = { expandedMap = false }) { Icon(Icons.Default.Search, "Show search controls") }
                             IconButton(onClick = { expandedMap = false }) { Icon(Icons.Default.FullscreenExit, "Exit expanded map") }
@@ -225,12 +237,12 @@ private fun MapControls(query: String, changeQuery: (String) -> Unit, enabled: B
                     Box(Modifier.weight(1f)) {
                         TextButton(onClick = savedPlaces, enabled = enabled,
                             modifier = Modifier.heightIn(min = 48.dp).testTag("map-saved-places")) {
-                            Icon(Icons.Default.BookmarkBorder, null, Modifier.size(24.dp)); Spacer(Modifier.width(6.dp))
+                            Icon(Icons.Outlined.BookmarkBorder, null, Modifier.size(26.dp)); Spacer(Modifier.width(8.dp))
                             Text("Saved places", style = MaterialTheme.typography.bodyLarge)
                         }
                     }
                     if (separateActions) {
-                        IconButton(onClick = information) { Icon(Icons.Default.Info, "Map information", Modifier.size(26.dp)) }
+                        IconButton(onClick = information) { Icon(Icons.Outlined.Info, "Map information", Modifier.size(26.dp)) }
                         IconButton(onClick = expand) { Icon(Icons.Default.Fullscreen, "Expand map", Modifier.size(26.dp)) }
                     } else Box {
                         IconButton(onClick = { showOptions = true }) { Icon(Icons.Default.MoreVert, "Map options", Modifier.size(26.dp)) }
@@ -264,12 +276,12 @@ internal fun MapSearchField(value: String, change: (String) -> Unit, canSearch: 
         decorationBox = { input ->
             GlassSurface(shape = RoundedCornerShape(24.dp), focused = focused) {
                 Row(Modifier.heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Search, null, Modifier.padding(start = 12.dp, end = 10.dp).size(24.dp))
+                    Icon(Icons.Default.Search, null, Modifier.padding(start = 16.dp, end = 12.dp).size(26.dp))
                     Box(Modifier.weight(1f).padding(vertical = 8.dp)) {
                         if (value.isEmpty()) Text(hint, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         input()
                     }
-                    if (search != null) IconButton(onClick = search, enabled = canSearch) { Icon(Icons.AutoMirrored.Filled.ArrowForward, "Search places") }
+                    if (search != null) IconButton(onClick = search, enabled = canSearch) { Icon(Icons.AutoMirrored.Filled.ArrowForward, "Search places", Modifier.size(26.dp)) }
                     else if (value.isNotEmpty()) IconButton(onClick = { change("") }) { Icon(Icons.Default.Close, "Clear place search") }
                     else Spacer(Modifier.width(12.dp))
                 }
