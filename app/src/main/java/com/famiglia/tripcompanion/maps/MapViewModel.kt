@@ -84,7 +84,7 @@ class MapViewModel(
             _state.value = _state.value.copy(nearbyPins = locations, searchedArea = area,
                 areaChanged = viewportMovementSequence != movementAtSearch && _state.value.viewport?.differsFrom(area) == true,
                 nearbyMessage = if (locations.isEmpty()) "No ${category.label.lowercase()} found here. Try another area or category."
-                    else "${locations.size} nearby results · tap a pin for details")
+                    else "${locations.size} nearby ${if (locations.size == 1) "result" else "results"} · tap a pin for details")
         }
     }
 

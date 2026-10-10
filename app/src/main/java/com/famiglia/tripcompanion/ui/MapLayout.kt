@@ -194,7 +194,11 @@ internal fun MapLayout(
                                 }
                             }
                         }
-                        val message = state.message ?: state.nearbyMessage?.takeIf { state.selected == null } ?: if (mapSlow) "The map has not loaded. Check your connection and Maps configuration, then reopen this screen." else null
+                        // In short windows the selected chip and result pins already provide
+                        // success feedback. Keep failures/empty guidance, without a bulky count banner.
+                        val message = state.message ?: state.nearbyMessage?.takeIf {
+                            state.selected == null && (!shortWindow || state.nearbyPins.isEmpty())
+                        } ?: if (mapSlow) "The map has not loaded. Check your connection and Maps configuration, then reopen this screen." else null
                         if (message != null) GlassSurface(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                             Text(message, Modifier.padding(12.dp).testTag("map-message"), style = MaterialTheme.typography.bodySmall)
                         }

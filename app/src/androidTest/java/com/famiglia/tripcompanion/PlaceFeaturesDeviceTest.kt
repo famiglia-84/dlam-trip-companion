@@ -12,6 +12,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.dp
@@ -86,9 +87,18 @@ class PlaceFeaturesDeviceTest {
         // geometry before taking the scroll-position baseline.
         compose.waitUntil(10_000) {
             compose.onAllNodesWithTag("map-controls").fetchSemanticsNodes().isEmpty() &&
-                compose.onAllNodesWithTag("map-reviews").fetchSemanticsNodes().isNotEmpty()
+                compose.onAllNodesWithTag("map-reviews").fetchSemanticsNodes().isNotEmpty() && !model.state.value.detailsBusy
         }
         compose.onNodeWithTag("map-reviews").performScrollTo().assertIsDisplayed()
+        // ScrollBy/bring-into-view and the sheet's last measure can finish after
+        // a semantics node becomes visible. Advance those frames before a baseline.
+        compose.mainClock.advanceTimeBy(300)
+        compose.waitForIdle()
+        device.waitForIdle(1000)
+        val root = compose.onNodeWithTag("map-layout").fetchSemanticsNode().boundsInRoot
+        val card = compose.onNodeWithTag("map-place-card").fetchSemanticsNode().boundsInRoot
+        assertEquals("Place card has reached its expanded anchor", root.top, card.top, 1f)
+        assertEquals("Expanded card has its final height", root.bottom, card.bottom, 1f)
     }
 
     @After fun tearDown() {
@@ -100,6 +110,10 @@ class PlaceFeaturesDeviceTest {
     @Test fun reviewsAreOnDemandAndBackReturnsToTheSameScrollPosition() {
         assertTrue(lookup.reviewCalls.isEmpty())
         val before = compose.onNodeWithTag("map-reviews").fetchSemanticsNode().boundsInRoot
+        val beforeRoot = compose.onNodeWithTag("map-layout").fetchSemanticsNode().boundsInRoot
+        val beforeCard = compose.onNodeWithTag("map-place-card").fetchSemanticsNode().boundsInRoot
+        val beforeScroll = compose.onNodeWithTag("map-place-details").fetchSemanticsNode()
+            .config[SemanticsProperties.VerticalScrollAxisRange].value()
         compose.onNodeWithTag("map-reviews").performClick()
         compose.onNodeWithText("Google-selected reviews").assertIsDisplayed()
         compose.onNodeWithText("Sample author").assertIsDisplayed()
@@ -114,7 +128,11 @@ class PlaceFeaturesDeviceTest {
         device.pressBack()
         compose.onNodeWithTag("place-feature-card").assertDoesNotExist()
         val after = compose.onNodeWithTag("map-reviews").fetchSemanticsNode().boundsInRoot
-        assertEquals(before.top, after.top, 1f)
+        val afterScroll = compose.onNodeWithTag("map-place-details").fetchSemanticsNode()
+            .config[SemanticsProperties.VerticalScrollAxisRange].value()
+        assertEquals("Reviews return must preserve scroll: before=$beforeScroll, after=$afterScroll; " +
+            "root before=$beforeRoot, after=${compose.onNodeWithTag("map-layout").fetchSemanticsNode().boundsInRoot}; " +
+            "card before=$beforeCard, after=${compose.onNodeWithTag("map-place-card").fetchSemanticsNode().boundsInRoot}", before.top, after.top, 1f)
         assertEquals("pizza-id", model.state.value.selected?.id)
         compose.onNodeWithTag("map-reviews").performClick()
         assertEquals("Reopening reuses transient reviews", listOf("pizza-id"), lookup.reviewCalls)

@@ -549,7 +549,9 @@ class MapLayoutDeviceTest {
         compose.waitUntil(10_000) { compose.onAllNodesWithContentDescription("Map options").fetchSemanticsNodes().isNotEmpty() }
         compose.runOnIdle { model.updateViewport(MapArea(41.1, 16.9, 1000.0)) }
         compose.onNodeWithTag("nearby-Cafes").assertIsDisplayed().performClick()
-        compose.waitUntil(10_000) { model.state.value.nearbyPins.size == 1 }
+        compose.waitUntil(10_000) { model.state.value.nearbyPins.size == 1 && !model.state.value.busy }
+        compose.onNodeWithTag("map-message").assertDoesNotExist()
+        compose.waitForIdle()
         val safe = compose.onNodeWithTag("map-safe-content").fetchSemanticsNode().boundsInRoot
         assertTrue("Nearby controls must leave usable map space in a short window: $safe", safe.height >= 100f)
         compose.runOnIdle { model.select("luz-id") }
