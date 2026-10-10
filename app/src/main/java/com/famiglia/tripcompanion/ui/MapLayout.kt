@@ -25,12 +25,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Outline
-import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalFocusManager
@@ -46,8 +42,6 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.Density
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import androidx.compose.ui.viewinterop.AndroidView
@@ -133,21 +127,19 @@ internal fun MapLayout(
                 sheetSwipeEnabled = state.selected != null, sheetShadowElevation = 0.dp,
                 containerColor = Color.Transparent, sheetContainerColor = Color.Transparent,
                 sheetContent = {
-                    // Keep the anchors fixed over the full map height, but clip the sheet
-                    // at the dock's upper edge as it moves. The dock space is transparent.
-                    val visibleSheet = object : Shape {
-                        override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density) =
-                            Outline.Rectangle(Rect(0f, 0f, size.width,
-                                with(density) { covered.toPx() }.coerceIn(0f, size.height)))
-                    }
-                    Column(Modifier.height(rootHeight).graphicsLayer { clip = true; shape = visibleSheet }) {
-                        key(state.selected?.id) { state.selected?.let { selected ->
-                            MapPlaceSheet(selected, places.firstOrNull { it.googlePlaceId == selected.id }, model, state,
-                                sheetHeight, shortWindow, sheetExpanded,
-                                toggle = { scope.launch { if (sheetExpanded) sheet.partialExpand() else sheet.expand() } },
-                                save = { dismissKeyboard(); save(selected.id, selected.name.ifBlank { "Saved place" }, selected.address) },
-                                appearance = appearance)
-                        } ?: Spacer(Modifier.height(1.dp)) }
+                    // The full-height wrapper keeps anchors fixed. Only its visible card
+                    // viewport grows during a drag, ending above the dock in every position.
+                    // Layout clipping also excludes covered content from hit testing/accessibility.
+                    Column(Modifier.height(rootHeight)) {
+                        Box(Modifier.fillMaxWidth().height(covered).clipToBounds()) {
+                            key(state.selected?.id) { state.selected?.let { selected ->
+                                MapPlaceSheet(selected, places.firstOrNull { it.googlePlaceId == selected.id }, model, state,
+                                    sheetHeight, shortWindow, sheetExpanded,
+                                    toggle = { scope.launch { if (sheetExpanded) sheet.partialExpand() else sheet.expand() } },
+                                    save = { dismissKeyboard(); save(selected.id, selected.name.ifBlank { "Saved place" }, selected.address) },
+                                    appearance = appearance)
+                            } ?: Spacer(Modifier.height(1.dp)) }
+                        }
                         Spacer(Modifier.height(footer))
                     }
                 },

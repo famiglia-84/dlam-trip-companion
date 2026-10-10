@@ -99,7 +99,7 @@ class SavedPlacesDeviceTest {
         val card = compose.onNodeWithTag("map-place-card").fetchSemanticsNode().boundsInRoot
         assertTrue("Map must continue behind the floating navigation", mapFrame.bottom > dock.top)
         assertTrue("SDK controls must remain above navigation and the place card", safeMap.bottom < card.top)
-        assertTrue("The card must not cover navigation", card.bottom <= dock.top)
+        assertTrue("The card must not cover navigation: card=$card, dock=$dock", card.bottom <= dock.top)
         val toolbar = compose.onNodeWithTag("map-toolbar").fetchSemanticsNode().boundsInRoot
         assertTrue(toolbar.bottom <= compose.onNodeWithTag("map-search").fetchSemanticsNode().boundsInRoot.top)
         val themeAction = hasContentDescription("Change appearance", substring = true)
