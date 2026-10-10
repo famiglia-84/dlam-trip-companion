@@ -389,6 +389,9 @@ class MapLayoutDeviceTest {
         compose.onNodeWithTag("map-save").assertIsDisplayed()
         compose.onNodeWithTag("map-place-details").assertDoesNotExist()
         compose.onNodeWithTag("map-search").assertIsDisplayed()
+        device.pressBack()
+        compose.onNodeWithTag("map-save").assertDoesNotExist()
+        compose.onNodeWithTag("map-search").assertIsDisplayed()
     }
 
     @Test fun shortAndWideWindowsKeepSaveUsableAndSavedPlacesDoNotOfferDuplicates() {

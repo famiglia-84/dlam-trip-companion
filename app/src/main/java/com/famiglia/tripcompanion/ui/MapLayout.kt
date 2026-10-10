@@ -101,7 +101,11 @@ internal fun MapLayout(
         if (sheet.currentValue == SheetValue.Hidden) model.dismissSelection()
     }
     BackHandler(enabled = state.selected != null) {
-        if (sheetExpanded) scope.launch { sheet.partialExpand() } else model.dismissSelection()
+        when {
+            sheetExpanded -> scope.launch { sheet.partialExpand() }
+            expandedMap -> expandedMap = false
+            else -> model.dismissSelection()
+        }
     }
     LaunchedEffect(state.selected?.id, sheetExpanded) { if (sheetExpanded) model.loadDetails() }
 
