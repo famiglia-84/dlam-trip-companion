@@ -56,12 +56,15 @@ internal fun GlassSurface(
 }
 
 @Composable
-internal fun GlassAction(label: String, icon: ImageVector, vertical: Boolean = false, click: () -> Unit) {
-    GlassSurface(Modifier.clickable(role = Role.Button, onClick = click), shape = RoundedCornerShape(16.dp)) {
+internal fun GlassAction(label: String, icon: ImageVector, modifier: Modifier = Modifier,
+    vertical: Boolean = false, enabled: Boolean = true, emphasized: Boolean = false, click: () -> Unit) {
+    GlassSurface(modifier.clickable(enabled = enabled, role = Role.Button, onClick = click),
+        shape = RoundedCornerShape(16.dp), focused = emphasized) {
         if (vertical) Column(Modifier.widthIn(min = 104.dp).heightIn(min = 76.dp).padding(12.dp),
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically)) {
             Icon(icon, null, Modifier.size(26.dp), tint = MaterialTheme.colorScheme.primary)
-            Text(label, style = MaterialTheme.typography.bodyLarge)
+            Text(label, style = MaterialTheme.typography.bodyLarge,
+                color = if (emphasized) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
         } else
         Row(Modifier.heightIn(min = 48.dp).padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -88,8 +91,3 @@ internal fun RowScope.GlassNavigationItem(label: String, icon: ImageVector, sele
             color = if (selected) colors.onSecondaryContainer else colors.onSurface)
     }
 }
-
-/** An opaque, drawing-only surround joins the sheet and dock without intercepting map input. */
-@Composable
-internal fun mapLowerBackdrop(): Color = if (MaterialTheme.colorScheme.background.luminance() < 0.5f)
-    Color(0xFF10241E) else Color(0xFFEDF5F0)

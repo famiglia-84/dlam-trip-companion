@@ -9,6 +9,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
@@ -43,6 +45,7 @@ class SavedPlacesDeviceTest {
     private var linkedId = 0L
     private var manualId = 0L
     private var fontScale by mutableFloatStateOf(1f)
+    private val mapColor = Color(0xFF446688)
     private lateinit var ownPhoto: File
 
     @Before fun setUp() {
@@ -61,7 +64,7 @@ class SavedPlacesDeviceTest {
         compose.setContent {
             val density = LocalDensity.current
             CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale), LocalMapRenderer provides { modifier, padding ->
-                Surface(modifier) { Box(Modifier.fillMaxSize().padding(padding).testTag("controlled-map")) { Text("Controlled map") } }
+                Surface(modifier, color = mapColor) { Box(Modifier.fillMaxSize().padding(padding).testTag("controlled-map")) { Text("Controlled map") } }
             }) {
                 val model: TravelViewModel = viewModel()
                 TravelApp(model)
@@ -99,9 +102,10 @@ class SavedPlacesDeviceTest {
         val card = compose.onNodeWithTag("map-place-card").fetchSemanticsNode().boundsInRoot
         assertTrue("Map must continue behind the floating navigation", mapFrame.bottom > dock.top)
         assertTrue("SDK controls must remain above navigation and the place card", safeMap.bottom < card.top)
-        assertTrue("The card must not cover navigation: card=$card, dock=$dock", card.bottom <= dock.top)
-        val backdrop = compose.onNodeWithTag("map-lower-backdrop").fetchSemanticsNode().boundsInRoot
-        assertTrue("Opaque surround must join the card to the dock", backdrop.top <= card.bottom + 1f && backdrop.bottom > dock.top)
+        val content = compose.onNodeWithTag("map-place-content").fetchSemanticsNode().boundsInRoot
+        assertTrue("Card background must continue behind the navigation: card=$card, dock=$dock", card.bottom > dock.bottom)
+        assertTrue("Information must remain clear of navigation: content=$content, dock=$dock", content.bottom <= dock.top)
+        compose.onNodeWithTag("map-lower-backdrop").assertDoesNotExist()
         val selectedTab = compose.onNodeWithTag("dock-item-map").assertIsSelected().fetchSemanticsNode().boundsInRoot
         val tabIcon = compose.onNodeWithTag("dock-item-map-icon", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
         val tabLabel = compose.onNodeWithTag("dock-item-map-label", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
@@ -114,6 +118,15 @@ class SavedPlacesDeviceTest {
         compose.onAllNodes(themeAction).assertCountEquals(1)
         compose.onNodeWithContentDescription("Expand place details").performClick()
         compose.onNodeWithTag("map-place-details").assertIsDisplayed()
+        val expandedContent = compose.onNodeWithTag("map-place-content").fetchSemanticsNode().boundsInRoot
+        assertTrue("Expanded scrollable information must also remain above the dock", expandedContent.bottom <= dock.top)
+        compose.onNodeWithText("Check opening hours before visiting. Google photos and details need a connection.")
+            .performScrollTo().assertIsDisplayed()
+        val finalNote = compose.onNodeWithText("Check opening hours before visiting. Google photos and details need a connection.")
+            .fetchSemanticsNode().boundsInRoot
+        assertTrue("The last item must scroll fully above the floating navigation", finalNote.bottom <= dock.top)
+        compose.onNodeWithTag("map-saved-status").performScrollTo().assertIsNotEnabled()
+        compose.onNodeWithTag("map-save").assertDoesNotExist()
         compose.onAllNodes(themeAction).assertCountEquals(1)
         val previousTheme = compose.onNode(themeAction).fetchSemanticsNode().config[SemanticsProperties.ContentDescription]
         compose.onNode(themeAction).performClick()
@@ -122,14 +135,20 @@ class SavedPlacesDeviceTest {
         }
         assertEquals(listOf("luz-id"), lookup.selected)
         assertEquals(listOf("luz-id"), lookup.photos.distinct())
+
     }
 
-    @Test fun unlinkedImagePrefillsSearchWithoutGuessingALocationOrUploadingAutomatically() {
+    @Test fun unlinkedImagePrefillsSearchWithoutRequestsAndTheDockRevealsTheMap() {
         compose.onNodeWithTag("place-image-$manualId").performClick()
         compose.onNodeWithTag("map-search").assertTextContains("Manual café Sampletown")
         assertTrue(lookup.selected.isEmpty())
         assertTrue(lookup.searches.isEmpty())
         assertEquals(listOf("luz-id"), lookup.photos.distinct())
+        val pixels = compose.onNodeWithTag("floating-navigation-container").captureToImage().toPixelMap()
+        val gapColor = pixels[pixels.width / 2, 1]
+        assertEquals("The dock's outer top gap must reveal the map, not a green footer", mapColor.red, gapColor.red, 0.01f)
+        assertEquals(mapColor.green, gapColor.green, 0.01f)
+        assertEquals(mapColor.blue, gapColor.blue, 0.01f)
     }
 
     @Test fun mapActionAndGlassNavigationStayUsableAcrossThemeChangesAndLargerText() {

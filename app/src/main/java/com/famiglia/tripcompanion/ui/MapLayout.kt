@@ -5,7 +5,6 @@ import android.widget.TextView
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.*
@@ -38,7 +37,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -143,19 +141,18 @@ internal fun MapLayout(
                 containerColor = Color.Transparent, sheetContainerColor = Color.Transparent,
                 sheetContent = {
                     // The full-height wrapper keeps anchors fixed. Only its visible card
-                    // viewport grows during a drag, ending above the dock in every position.
-                    // Layout clipping also excludes covered content from hit testing/accessibility.
+                    // viewport grows during a drag. The surface extends behind the dock,
+                    // while a separate content clearance keeps information above it.
                     Column(Modifier.height(rootHeight)) {
-                        Box(Modifier.fillMaxWidth().height(covered).clipToBounds()) {
+                        Box(Modifier.fillMaxWidth().height(if (state.selected == null) 0.dp else covered + footer).clipToBounds()) {
                             key(state.selected?.id) { state.selected?.let { selected ->
                                 MapPlaceSheet(selected, places.firstOrNull { it.googlePlaceId == selected.id }, model, state,
-                                    covered, shortWindow, sheetExpanded,
+                                    covered + footer, shortWindow, sheetExpanded, bottomClearance = footer,
                                     toggle = { scope.launch { if (sheetExpanded) sheet.partialExpand() else sheet.expand() } },
                                     save = { dismissKeyboard(); save(selected.id, selected.name.ifBlank { "Saved place" }, selected.address) },
                                     appearance = appearance, compactHeight = { compactHeight = it })
                             } ?: Spacer(Modifier.height(1.dp)) }
                         }
-                        Spacer(Modifier.height(footer))
                     }
                 },
             ) {
@@ -172,12 +169,6 @@ internal fun MapLayout(
                                 if (detailsExpanded) PaddingValues(8.dp) else PaddingValues(start = 8.dp, top = topInset, end = 8.dp, bottom = bottomInset))
                         }
                     }
-                    // Join the card to the dock without painting over the map at its corners.
-                    // Draw only below the card. A full-screen Surface here would
-                    // block native map gestures even when its fill were transparent.
-                    Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth()
-                        .height(footer)
-                        .background(mapLowerBackdrop()).testTag("map-lower-backdrop"))
                     Column(Modifier.fillMaxWidth().onSizeChanged { controlsHeight = it.height }
                         .graphicsLayer { alpha = if (detailsExpanded) 0f else 1f }) {
                         if (!expandedMap) MapControls(query, model::changeQuery, !state.busy, shortWindow,
@@ -216,9 +207,7 @@ internal fun MapLayout(
                                     }
                                 }
                             }
-                            Surface(color = Color.White, modifier = Modifier.fillMaxWidth()) {
-                                Image(painterResource(com.google.android.libraries.places.R.drawable.google_maps_attribution_image), "Google Maps", Modifier.padding(4.dp).height(18.dp))
-                            }
+                            GoogleMapsAttribution(Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
                         }
                     }
                 }

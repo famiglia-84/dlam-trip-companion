@@ -15,6 +15,8 @@ import androidx.compose.material.icons.filled.Contrast
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
@@ -259,7 +261,8 @@ class MapLayoutDeviceTest {
         val selectedFrame = compose.onNodeWithTag("map-frame").fetchSemanticsNode().boundsInRoot
         assertEquals(selectedFrame.left, card.left, 1f)
         assertEquals(selectedFrame.right, card.right, 1f)
-        assertTrue("Summary should fit its content, not leave a large empty panel", card.height < 280f)
+        val content = compose.onNodeWithTag("map-place-content").fetchSemanticsNode().boundsInRoot
+        assertTrue("Summary content should fit without a large empty panel", content.height < 280f)
         assertEquals(root.bottom, map.bottom, 1f)
         val saveButton = compose.onNodeWithTag("map-save").fetchSemanticsNode().boundsInRoot
         assertTrue("Compact Save belongs beside/below the summary", saveButton.top >=
@@ -270,9 +273,9 @@ class MapLayoutDeviceTest {
         assertTrue("Place text must sit beside the rounded thumbnail", heading.left >= thumbnail.right + 16f)
         assertEquals(80f, thumbnail.width, 1f)
         compose.onNodeWithText("Photo: Sample photographer").assertIsDisplayed()
-        assertTrue("Collapsed card must end above the footer", card.bottom <= root.bottom - 12f + 1f)
-        val backdrop = compose.onNodeWithTag("map-lower-backdrop").fetchSemanticsNode().boundsInRoot
-        assertTrue("Shared lower backdrop must cover the gap below the card", backdrop.top <= card.bottom && backdrop.bottom == root.bottom)
+        assertEquals("Card background must extend to the bottom", root.bottom, card.bottom, 1f)
+        assertEquals("Information must retain footer clearance", root.bottom - 12f, content.bottom, 1f)
+        compose.onNodeWithTag("map-lower-backdrop").assertDoesNotExist()
         assertTrue(saved.isEmpty())
         compose.onNodeWithTag("map-save").performClick()
         assertEquals(listOf(Triple("luz-id", "Luz", "Via Giuseppe Re David, 32, 70126 Bari BA, Italy")), saved)
@@ -348,10 +351,12 @@ class MapLayoutDeviceTest {
         val root = compose.onNodeWithTag("map-layout").fetchSemanticsNode().boundsInRoot
         val card = compose.onNodeWithTag("map-place-card").fetchSemanticsNode().boundsInRoot
         assertEquals("Expanded card must completely cover the search/toolbar", root.top, card.top, 1f)
-        assertEquals(root.bottom - 12f, card.bottom, 1f)
+        assertEquals(root.bottom, card.bottom, 1f)
         val toolbar = compose.onNodeWithTag("place-details-toolbar").fetchSemanticsNode().boundsInRoot
         assertTrue("Expanded toolbar should be slim", toolbar.height <= 80f)
         compose.onNodeWithContentDescription("Google Maps").assertIsDisplayed()
+        val logoPixels = compose.onNodeWithTag("google-maps-attribution").captureToImage().toPixelMap()
+        assertTrue("Official wordmark must not have a white background plate", logoPixels[0, 0].luminance() < 0.3f)
         compose.onNodeWithContentDescription("Change test theme").performClick()
         assertEquals(1, themeChanges)
         compose.onNodeWithText("★ 4.5 · 12 ratings").performScrollTo().assertIsDisplayed()
@@ -371,7 +376,8 @@ class MapLayoutDeviceTest {
                 "body=${body.boundsInRoot}, name=${compose.onNodeWithTag("place-detail-name").fetchSemanticsNode().boundsInRoot}\n" +
                 compose.onRoot(useUnmergedTree = true).printToString(), failure)
         }
-        compose.onNodeWithTag("map-save").assertIsDisplayed()
+        // Save now belongs to the scrollable action row, not the pinned toolbar.
+        compose.onNodeWithTag("map-save").assertIsNotDisplayed()
         assertEquals(toolbar.top, compose.onNodeWithTag("place-details-toolbar").fetchSemanticsNode().boundsInRoot.top, 1f)
         assertEquals(listOf("luz-id"), lookup.richCalls)
         assertEquals("One cached thumbnail lookup across sheet states", listOf("luz-id"), lookup.photoCalls)
@@ -472,6 +478,21 @@ class MapLayoutDeviceTest {
         compose.onNodeWithText("No photos available.").assertDoesNotExist()
         compose.onNodeWithText("Opening hours").assertDoesNotExist()
         compose.onNodeWithText("Refresh details").assertIsDisplayed()
+    }
+
+    @Test fun expandedSaveUsesTheSameActionRowAndSelectedNameAndAddress() {
+        selectPlace()
+        compose.onNodeWithContentDescription("Expand place details").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("★ 4.5 · 12 ratings").fetchSemanticsNodes().isNotEmpty() }
+        val saveTile = compose.onNodeWithTag("map-save").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        val directionsTile = compose.onNodeWithTag("map-directions").fetchSemanticsNode().boundsInRoot
+        val toolbar = compose.onNodeWithTag("place-details-toolbar").fetchSemanticsNode().boundsInRoot
+        assertEquals("Save and Directions must have equal tile heights", directionsTile.height, saveTile.height, 1f)
+        assertEquals("Save must share the action-row baseline", directionsTile.top, saveTile.top, 1f)
+        assertTrue("Save must belong to the body rather than the toolbar", saveTile.top >= toolbar.bottom)
+        compose.onAllNodesWithTag("map-save").assertCountEquals(1)
+        compose.onNodeWithTag("map-save").performClick()
+        assertEquals(listOf(Triple("luz-id", "Luz", "Via Giuseppe Re David, 32, 70126 Bari BA, Italy")), saved)
     }
 
     private class FakePlaces : PlaceLookup {

@@ -4,7 +4,6 @@ import android.text.method.LinkMovementMethod
 import android.widget.TextView
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -19,7 +18,6 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.text.HtmlCompat
@@ -56,8 +54,9 @@ internal fun PlaceImage(localUri: String, photo: PlacePhoto?, name: String, modi
             }.build(), contentDescription = "Photo of $name", contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize(), onSuccess = { loaded = true }, onError = { failed = true },
         )
-        if (loaded && localUri.isBlank()) Surface(Modifier.align(Alignment.BottomStart), color = Color.White) {
-            Image(painterResource(com.google.android.libraries.places.R.drawable.google_maps_attribution_image), "Google Maps", Modifier.padding(2.dp).height(12.dp))
+        if (loaded && localUri.isBlank()) Surface(Modifier.align(Alignment.BottomStart),
+            color = Color.Black.copy(alpha = 0.65f), shape = RoundedCornerShape(4.dp)) {
+            GoogleMapsAttribution(Modifier.padding(2.dp), darkBackground = true, height = 12.dp)
         }
     }
 }
