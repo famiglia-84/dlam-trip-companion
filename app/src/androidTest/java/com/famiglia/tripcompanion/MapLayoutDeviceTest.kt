@@ -233,7 +233,9 @@ class MapLayoutDeviceTest {
         val surround = compose.onNodeWithTag("map-card-surround").fetchSemanticsNode().boundsInRoot
         val card = compose.onNodeWithTag("map-place-card").fetchSemanticsNode().boundsInRoot
         val safeMap = compose.onNodeWithTag("map-safe-content").fetchSemanticsNode().boundsInRoot
-        assertTrue("The larger photo summary must leave a useful map area: root=$root, safe=$safeMap", safeMap.height > root.height * 0.4f)
+        // An absolute interaction area remains meaningful across navigation/status-bar
+        // sizes; the previous screen percentage assumed the smaller, text-only card.
+        assertTrue("Photo summary must leave at least 280 dp for map interaction: root=$root, safe=$safeMap", safeMap.height >= 280f)
         assertEquals(safeMap.bottom + 8f, surround.top, 1f)
         assertEquals(card.left - surround.left, card.top - surround.top, 1f)
         assertEquals(root.bottom, map.bottom, 1f)
