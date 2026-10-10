@@ -9,7 +9,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.test.*
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -22,6 +26,7 @@ import com.famiglia.tripcompanion.maps.*
 import com.famiglia.tripcompanion.ui.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.flow.first
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
@@ -40,6 +45,8 @@ class SavedPlacesDeviceTest {
     private var previousLookup: PlaceLookup? = null
     private var linkedId = 0L
     private var manualId = 0L
+    private var fontScale by mutableFloatStateOf(1f)
+    private val mapColor = Color(0xFF446688)
     private lateinit var ownPhoto: File
 
     @Before fun setUp() {
@@ -56,14 +63,15 @@ class SavedPlacesDeviceTest {
             manualId = app.repository.save(Place(name = "Manual café", address = "Sampletown", photoUri = Uri.fromFile(ownPhoto).toString()))
         }
         compose.setContent {
-            CompositionLocalProvider(LocalMapRenderer provides { modifier, padding ->
-                Surface(modifier) { Box(Modifier.fillMaxSize().padding(padding).testTag("controlled-map")) { Text("Controlled map") } }
+            val density = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale), LocalMapRenderer provides { modifier, padding ->
+                Surface(modifier, color = mapColor) { Box(Modifier.fillMaxSize().padding(padding).testTag("controlled-map")) { Text("Controlled map") } }
             }) {
                 val model: TravelViewModel = viewModel()
                 TravelApp(model)
             }
         }
-        compose.onNode(hasText("Saved places") and hasClickAction()).performClick()
+        compose.onNode(hasText("Saved places") and hasClickAction() and hasAnyAncestor(hasTestTag("glass-navigation"))).performClick()
         compose.waitUntil(15_000) { compose.onAllNodesWithTag("saved-place-$linkedId").fetchSemanticsNodes().isNotEmpty() }
     }
 
@@ -89,12 +97,37 @@ class SavedPlacesDeviceTest {
         compose.waitUntil(15_000) { compose.onAllNodesWithText("Saved as Luz Café").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("Saved as Luz Café").assertIsDisplayed()
         compose.onNodeWithText("Trip Companion").assertDoesNotExist()
+        val dock = compose.onNodeWithTag("glass-navigation").fetchSemanticsNode().boundsInRoot
+        val mapFrame = compose.onNodeWithTag("map-frame").fetchSemanticsNode().boundsInRoot
+        val safeMap = compose.onNodeWithTag("controlled-map").fetchSemanticsNode().boundsInRoot
+        val card = compose.onNodeWithTag("map-place-card").fetchSemanticsNode().boundsInRoot
+        assertTrue("Map must continue behind the floating navigation", mapFrame.bottom > dock.top)
+        assertTrue("SDK controls must remain above navigation and the place card", safeMap.bottom < card.top)
+        val content = compose.onNodeWithTag("map-place-content").fetchSemanticsNode().boundsInRoot
+        assertTrue("Card background must continue behind the navigation: card=$card, dock=$dock", card.bottom > dock.bottom)
+        assertTrue("Information must remain clear of navigation: content=$content, dock=$dock", content.bottom <= dock.top)
+        compose.onNodeWithTag("map-lower-backdrop").assertDoesNotExist()
+        val selectedTab = compose.onNodeWithTag("dock-item-map").assertIsSelected().fetchSemanticsNode().boundsInRoot
+        val tabIcon = compose.onNodeWithTag("dock-item-map-icon", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        val tabLabel = compose.onNodeWithTag("dock-item-map-label", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        assertEquals(28f, tabIcon.height, 1f)
+        assertTrue("Selected capsule must contain both icon and label", selectedTab.top < tabIcon.top && selectedTab.bottom > tabLabel.bottom)
+        assertTrue("The dock must remain a generous touch target", selectedTab.height >= 72f)
         val toolbar = compose.onNodeWithTag("map-toolbar").fetchSemanticsNode().boundsInRoot
         assertTrue(toolbar.bottom <= compose.onNodeWithTag("map-search").fetchSemanticsNode().boundsInRoot.top)
         val themeAction = hasContentDescription("Change appearance", substring = true)
         compose.onAllNodes(themeAction).assertCountEquals(1)
         compose.onNodeWithContentDescription("Expand place details").performClick()
         compose.onNodeWithTag("map-place-details").assertIsDisplayed()
+        val expandedContent = compose.onNodeWithTag("map-place-content").fetchSemanticsNode().boundsInRoot
+        assertTrue("Expanded scrollable information must also remain above the dock", expandedContent.bottom <= dock.top)
+        compose.onNodeWithText("Check opening hours before visiting. Google photos and details need a connection.")
+            .performScrollTo().assertIsDisplayed()
+        val finalNote = compose.onNodeWithText("Check opening hours before visiting. Google photos and details need a connection.")
+            .fetchSemanticsNode().boundsInRoot
+        assertTrue("The last item must scroll fully above the floating navigation", finalNote.bottom <= dock.top)
+        compose.onNodeWithTag("map-saved-status").performScrollTo().assertIsEnabled()
+        compose.onNodeWithTag("map-save").assertDoesNotExist()
         compose.onAllNodes(themeAction).assertCountEquals(1)
         val previousTheme = compose.onNode(themeAction).fetchSemanticsNode().config[SemanticsProperties.ContentDescription]
         compose.onNode(themeAction).performClick()
@@ -103,14 +136,77 @@ class SavedPlacesDeviceTest {
         }
         assertEquals(listOf("luz-id"), lookup.selected)
         assertEquals(listOf("luz-id"), lookup.photos.distinct())
+
     }
 
-    @Test fun unlinkedImagePrefillsSearchWithoutGuessingALocationOrUploadingAutomatically() {
+    @Test fun unsavingRequiresConfirmationKeepsTheCardAndPreservesItineraryNotes() {
+        val activityId = runBlocking(Dispatchers.IO) {
+            val place = app.repository.data.first().places.first { it.id == linkedId }
+            app.repository.save(place.copy(notes = "Private saved-place note"))
+            val trip = app.repository.save(Trip(destination = "Bari", startDate = "2026-10-10", endDate = "2026-10-11"))
+            val plan = app.repository.save(DayPlan(tripId = trip, date = "2026-10-10"))
+            app.repository.save(PlanActivity(planId = plan, title = "Coffee stop", time = "09:00", placeId = linkedId, notes = "Keep this itinerary note"))
+        }
+        compose.onNodeWithTag("place-image-$linkedId").performClick()
+        compose.waitUntil(15_000) { compose.onAllNodesWithTag("map-saved-status").fetchSemanticsNodes().isNotEmpty() }
+        // Compact Saved is actionable too. Cancelling must leave the full record intact.
+        compose.onNodeWithTag("map-saved-status").assertIsEnabled().performClick()
+        compose.onNodeWithText("Remove Luz Café from saved places?").assertIsDisplayed()
+        compose.onNodeWithText("Keep it").performClick()
+        val kept = runBlocking(Dispatchers.IO) { app.repository.data.first().places.first { it.id == linkedId } }
+        assertEquals("Private saved-place note", kept.notes)
+        compose.onNodeWithTag("map-saved-status").assertIsDisplayed()
+        // Expanded Saved uses the same confirmation and removes only this local entry.
+        compose.onNodeWithContentDescription("Expand place details").performClick()
+        compose.onNodeWithTag("map-saved-status").performScrollTo().performClick()
+        compose.onNodeWithText("Remove Luz Café from saved places?").assertIsDisplayed()
+        compose.onNodeWithText("This removes this saved entry, including its notes and trip assignment. Your itinerary activities and their notes are kept, but their link to this saved place is removed. This cannot be undone.").assertIsDisplayed()
+        compose.onNodeWithText("Remove", useUnmergedTree = true).performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("map-save").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("map-save").assertIsEnabled()
+        compose.onNodeWithTag("map-place-details").assertIsDisplayed()
+        compose.onNodeWithTag("place-detail-name").assertTextEquals("Provider place")
+        val remaining = runBlocking(Dispatchers.IO) { app.repository.data.first() }
+        assertEquals(listOf(manualId), remaining.places.map { it.id })
+        val activity = remaining.activities.single { it.id == activityId }
+        assertNull(activity.placeId)
+        assertEquals("Coffee stop", activity.title)
+        assertEquals("09:00", activity.time)
+        assertEquals("Keep this itinerary note", activity.notes)
+        assertEquals(1, remaining.trips.size)
+        assertEquals(1, remaining.plans.size)
+        assertEquals(listOf("luz-id"), lookup.selected)
+    }
+
+    @Test fun unlinkedImagePrefillsSearchWithoutRequestsAndTheDockRevealsTheMap() {
         compose.onNodeWithTag("place-image-$manualId").performClick()
         compose.onNodeWithTag("map-search").assertTextContains("Manual café Sampletown")
         assertTrue(lookup.selected.isEmpty())
         assertTrue(lookup.searches.isEmpty())
         assertEquals(listOf("luz-id"), lookup.photos.distinct())
+        val pixels = compose.onNodeWithTag("floating-navigation-container").captureToImage().toPixelMap()
+        val gapColor = pixels[pixels.width / 2, 1]
+        assertEquals("The dock's outer top gap must reveal the map, not a green footer", mapColor.red, gapColor.red, 0.01f)
+        assertEquals(mapColor.green, gapColor.green, 0.01f)
+        assertEquals(mapColor.blue, gapColor.blue, 0.01f)
+    }
+
+    @Test fun mapActionAndGlassNavigationStayUsableAcrossThemeChangesAndLargerText() {
+        compose.runOnIdle { fontScale = 1.5f }
+        compose.onNode(hasText("View on map") and hasClickAction()).performClick()
+        compose.waitUntil(15_000) { compose.onAllNodesWithText("Saved as Luz Café").fetchSemanticsNodes().isNotEmpty() }
+        val themeAction = hasContentDescription("Change appearance", substring = true)
+        repeat(2) {
+            val before = compose.onNode(themeAction).fetchSemanticsNode().config[SemanticsProperties.ContentDescription]
+            compose.onNode(themeAction).performClick()
+            compose.waitUntil(10_000) { compose.onNode(themeAction).fetchSemanticsNode().config[SemanticsProperties.ContentDescription] != before }
+            compose.onNodeWithTag("map-search").assertIsDisplayed()
+            compose.onNodeWithContentDescription("Close place").assertIsDisplayed()
+            compose.onNodeWithTag("glass-navigation").assertIsDisplayed()
+        }
+        compose.onNode(hasText("Saved places") and hasClickAction() and hasAnyAncestor(hasTestTag("glass-navigation"))).performClick()
+        compose.onNode(hasText("View on map") and hasClickAction()).assertIsDisplayed()
+        assertEquals(listOf("luz-id"), lookup.selected)
     }
 
     private class FakePlaces : PlaceLookup {

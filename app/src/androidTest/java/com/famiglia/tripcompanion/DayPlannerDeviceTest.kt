@@ -63,6 +63,7 @@ class DayPlannerDeviceTest {
         assertEquals(1, generated)
         assertTrue(runBlocking { app.repository.data.first().plans.isEmpty() })
         compose.activityRule.scenario.recreate()
+        compose.waitUntil(15_000) { compose.onAllNodesWithTag("ai-review").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("ai-review").performScrollTo().assertIsDisplayed()
         compose.onNodeWithTag("ai-save").performScrollTo().performClick()
         compose.waitUntil(15_000) { compose.onAllNodesWithTag("ai-review").fetchSemanticsNodes().isEmpty() }
@@ -79,6 +80,7 @@ class DayPlannerDeviceTest {
         compose.onNodeWithText("Suggest a day plan").performScrollTo().performClick()
         compose.onNodeWithTag("ai-place-$placeId").performScrollTo().performClick()
         compose.onNodeWithText("Build without AI").performScrollTo().performClick()
+        compose.waitUntil(15_000) { compose.onAllNodesWithTag("ai-review").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("ai-review").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Close").performScrollTo().performClick()
         assertEquals(0, generated)
@@ -93,6 +95,7 @@ class DayPlannerDeviceTest {
         }
         compose.onNodeWithTag("ai-place-$placeId").performScrollTo().performClick()
         compose.onNodeWithText("Build without AI").performScrollTo().performClick()
+        compose.waitUntil(15_000) { compose.onAllNodesWithTag("ai-review").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("ai-review").performScrollTo().assertIsDisplayed()
         assertEquals(0, generated)
         assertTrue(runBlocking { app.repository.data.first().plans.isEmpty() })

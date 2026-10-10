@@ -25,7 +25,7 @@ class EditorDeviceTest {
         device.executeShellCommand("wm size 400x900")
         val database = (compose.activity.application as TripApplication).database
         runBlocking(Dispatchers.IO) { database.clearAllTables() }
-        compose.waitUntil(15_000) { compose.onAllNodesWithTag("compact-layout").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(15_000) { compose.onAllNodesWithTag("compact-layout").fetchSemanticsNodes(atLeastOneRootRequired = false).isNotEmpty() }
     }
 
     @After fun restoreDisplay() {
@@ -60,10 +60,16 @@ class EditorDeviceTest {
         compose.onNodeWithText("Destination").performTextInput("Bari")
         compose.onNodeWithText("Save").performClick()
         compose.waitUntil(15_000) { compose.onAllNodesWithText("Bari").fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithText("Add reservation").assertIsDisplayed()
+        // A floating dock reduces the list viewport; reaching the action can require scrolling.
+        compose.waitUntil(15_000) { compose.onAllNodesWithText("Cancel").fetchSemanticsNodes().isEmpty() &&
+            compose.onAllNodesWithText("Add reservation").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("Add reservation").performScrollTo().assertIsDisplayed()
         compose.activityRule.scenario.recreate()
         compose.waitUntil(15_000) { compose.onAllNodesWithText("Bari").fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithText("Add reservation").assertIsDisplayed()
+        // A floating dock reduces the list viewport; reaching the action can require scrolling.
+        compose.waitUntil(15_000) { compose.onAllNodesWithText("Cancel").fetchSemanticsNodes().isEmpty() &&
+            compose.onAllNodesWithText("Add reservation").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("Add reservation").performScrollTo().assertIsDisplayed()
     }
 
     @Test fun editorDraftSurvivesActivityRecreation() {
@@ -82,10 +88,10 @@ class EditorDeviceTest {
         compose.onNodeWithText("Bari").performClick()
         compose.onNodeWithText("Day plans").performClick()
         device.executeShellCommand("wm size 1000x900")
-        compose.waitUntil(15_000) { compose.onAllNodesWithTag("expanded-layout").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(15_000) { compose.onAllNodesWithTag("expanded-layout").fetchSemanticsNodes(atLeastOneRootRequired = false).isNotEmpty() }
         compose.onNodeWithText("Add day plan").assertIsDisplayed()
         device.executeShellCommand("wm size 400x900")
-        compose.waitUntil(15_000) { compose.onAllNodesWithTag("compact-layout").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(15_000) { compose.onAllNodesWithTag("compact-layout").fetchSemanticsNodes(atLeastOneRootRequired = false).isNotEmpty() }
         compose.onNodeWithText("Add day plan").assertIsDisplayed()
     }
 }
