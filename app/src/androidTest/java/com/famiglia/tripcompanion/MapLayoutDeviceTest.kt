@@ -218,6 +218,9 @@ class MapLayoutDeviceTest {
 
     @Test fun searchResultsOverlayTheMapAndSelectionKeepsABoundedContentSizedSummary() {
         searchForBari(useKeyboard = false)
+        // Search results may arrive before the IME's final resize frame. Compare
+        // sibling bounds only after the actual window has finished changing.
+        awaitStableMapWindow()
         // Compare sibling bounds in the same layout, rather than an earlier IME/window size.
         val searchRoot = compose.onNodeWithTag("map-layout").fetchSemanticsNode().boundsInRoot
         val controls = compose.onNodeWithTag("map-controls").fetchSemanticsNode().boundsInRoot
