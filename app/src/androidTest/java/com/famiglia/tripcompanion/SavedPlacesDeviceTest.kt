@@ -67,7 +67,7 @@ class SavedPlacesDeviceTest {
                 TravelApp(model)
             }
         }
-        compose.onNode(hasText("Saved places") and hasClickAction()).performClick()
+        compose.onNode(hasText("Saved places") and hasClickAction() and hasAnyAncestor(hasTestTag("glass-navigation"))).performClick()
         compose.waitUntil(15_000) { compose.onAllNodesWithTag("saved-place-$linkedId").fetchSemanticsNodes().isNotEmpty() }
     }
 
@@ -137,7 +137,7 @@ class SavedPlacesDeviceTest {
             compose.onNodeWithContentDescription("Close place").assertIsDisplayed()
             compose.onNodeWithTag("glass-navigation").assertIsDisplayed()
         }
-        compose.onNode(hasText("Saved places") and hasClickAction()).performClick()
+        compose.onNode(hasText("Saved places") and hasClickAction() and hasAnyAncestor(hasTestTag("glass-navigation"))).performClick()
         compose.onNode(hasText("View on map") and hasClickAction()).assertIsDisplayed()
         assertEquals(listOf("luz-id"), lookup.selected)
     }

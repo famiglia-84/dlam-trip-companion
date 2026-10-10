@@ -25,6 +25,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.toArgb
@@ -128,7 +129,7 @@ internal fun MapLayout(
             }
         }
         Column(Modifier.fillMaxSize()) {
-            Box(Modifier.fillMaxWidth().weight(1f).testTag("map-sheet-viewport")) {
+            Box(Modifier.fillMaxWidth().weight(1f).clipToBounds().testTag("map-sheet-viewport")) {
                 BottomSheetScaffold(
                     scaffoldState = sheetScaffold, sheetPeekHeight = peek, sheetDragHandle = null,
                     sheetSwipeEnabled = state.selected != null, sheetShadowElevation = 0.dp,

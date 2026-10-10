@@ -1,5 +1,7 @@
 package com.famiglia.tripcompanion
 
+import android.os.SystemClock
+
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.*
@@ -102,6 +104,18 @@ class MapLayoutDeviceTest {
         searchForBari()
         compose.onNodeWithText("Luz restaurant").performClick()
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("map-save").fetchSemanticsNodes().isNotEmpty() }
+        // Compose idle does not await the platform IME/window-insets animation. Start physical
+        // gesture measurements only once the window has stopped resizing after keyboard dismissal.
+        var previous = compose.onNodeWithTag("map-layout").fetchSemanticsNode().boundsInRoot
+        var stableSince = SystemClock.uptimeMillis()
+        compose.waitUntil(10_000) {
+            val current = compose.onNodeWithTag("map-layout").fetchSemanticsNode().boundsInRoot
+            if (current != previous || keyboardVisible) {
+                previous = current
+                stableSince = SystemClock.uptimeMillis()
+            }
+            SystemClock.uptimeMillis() - stableSince >= 500
+        }
     }
 
     @Test fun searchResultsOverlayTheMapAndSelectionKeepsSaveVisibleWithUniformPadding() {
@@ -178,6 +192,7 @@ class MapLayoutDeviceTest {
     @Test fun draggingTheSheetLoadsDetailsOnceAndBackAndCloseKeepMapUsable() {
         selectPlace()
         assertTrue(lookup.richCalls.isEmpty())
+        val rootBeforeDrag = compose.onNodeWithTag("map-layout").fetchSemanticsNode().boundsInRoot
         val viewportBeforeDrag = compose.onNodeWithTag("map-sheet-viewport").fetchSemanticsNode().boundsInRoot
         val sheetBeforeDrag = compose.onNodeWithTag("map-card-surround").fetchSemanticsNode().boundsInRoot
         val nameBefore = compose.onNodeWithTag("place-detail-name").fetchSemanticsNode().boundsInRoot
@@ -189,8 +204,9 @@ class MapLayoutDeviceTest {
             down(start)
             moveTo((start + end) / 2f, delayMillis = 250)
         }
-        assertEquals(viewportBeforeDrag.height,
-            compose.onNodeWithTag("map-sheet-viewport").fetchSemanticsNode().boundsInRoot.height, 1f)
+        assertEquals("Window changed during drag: before=$rootBeforeDrag, after=" +
+            compose.onNodeWithTag("map-layout").fetchSemanticsNode().boundsInRoot,
+            viewportBeforeDrag.height, compose.onNodeWithTag("map-sheet-viewport").fetchSemanticsNode().boundsInRoot.height, 1f)
         assertTrue("The card must actually follow the drag", compose.onNodeWithTag("map-card-surround")
             .fetchSemanticsNode().boundsInRoot.top < sheetBeforeDrag.top - 40f)
         compose.onRoot().performTouchInput {
