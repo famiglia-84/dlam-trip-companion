@@ -11,6 +11,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -87,6 +88,19 @@ class SavedPlacesDeviceTest {
         compose.onNodeWithTag("place-image-$linkedId").performClick()
         compose.waitUntil(15_000) { compose.onAllNodesWithText("Saved as Luz Café").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("Saved as Luz Café").assertIsDisplayed()
+        compose.onNodeWithText("Trip Companion").assertDoesNotExist()
+        val toolbar = compose.onNodeWithTag("map-toolbar").fetchSemanticsNode().boundsInRoot
+        assertTrue(toolbar.bottom <= compose.onNodeWithTag("map-search").fetchSemanticsNode().boundsInRoot.top)
+        val themeAction = hasContentDescription("Change appearance", substring = true)
+        compose.onAllNodes(themeAction).assertCountEquals(1)
+        compose.onNodeWithContentDescription("Expand place details").performClick()
+        compose.onNodeWithTag("map-place-details").assertIsDisplayed()
+        compose.onAllNodes(themeAction).assertCountEquals(1)
+        val previousTheme = compose.onNode(themeAction).fetchSemanticsNode().config[SemanticsProperties.ContentDescription]
+        compose.onNode(themeAction).performClick()
+        compose.waitUntil(10_000) {
+            compose.onNode(themeAction).fetchSemanticsNode().config[SemanticsProperties.ContentDescription] != previousTheme
+        }
         assertEquals(listOf("luz-id"), lookup.selected)
         assertEquals(listOf("luz-id"), lookup.photos.distinct())
     }

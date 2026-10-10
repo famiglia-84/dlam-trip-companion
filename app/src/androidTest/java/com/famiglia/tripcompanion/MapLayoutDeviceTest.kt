@@ -4,6 +4,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Contrast
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -40,6 +42,7 @@ class MapLayoutDeviceTest {
     private var fontScale by mutableFloatStateOf(1f)
     @Volatile private var keyboardVisible = false
     private var previousKeyboardSetting = ""
+    private var themeChanges = 0
 
     @OptIn(ExperimentalMaterial3Api::class)
     @Before fun setUp() {
@@ -56,10 +59,11 @@ class MapLayoutDeviceTest {
                 SideEffect { keyboardVisible = keyboardNow }
                 CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale)) {
                     Scaffold(
-                        topBar = { TopAppBar(title = { Text("Trip Companion") }) },
                         bottomBar = { NavigationBar { Text("My trips · Saved places · Map") } },
                     ) { padding ->
-                        MapLayout(model, places, null, { id, label, address -> saved += Triple(id, label, address) }, Modifier.padding(padding).consumeWindowInsets(padding)) { modifier, safePadding ->
+                        MapLayout(model, places, null, { id, label, address -> saved += Triple(id, label, address) }, Modifier.padding(padding).consumeWindowInsets(padding), appearance = {
+                            IconButton(onClick = { themeChanges++ }) { Icon(Icons.Default.Contrast, "Change test theme") }
+                        }) { modifier, safePadding ->
                             Surface(modifier, color = MaterialTheme.colorScheme.secondaryContainer) {
                                 Box(Modifier.fillMaxSize().padding(safePadding).testTag("map-safe-content")) { Text("Controlled map renderer") }
                             }
@@ -69,6 +73,7 @@ class MapLayoutDeviceTest {
             }
         }
         compose.waitForIdle()
+        compose.waitUntil(10_000) { compose.activity.hasWindowFocus() }
     }
 
     @After fun tearDown() {
@@ -84,6 +89,7 @@ class MapLayoutDeviceTest {
 
     private fun searchForBari(useKeyboard: Boolean = true) {
         compose.onNodeWithTag("map-search").performClick().performTextInput("Bari")
+        compose.onNodeWithTag("map-search").assertIsFocused()
         compose.waitUntil(10_000) { keyboardVisible }
         assertTrue(lookup.searches.isEmpty())
         if (useKeyboard) compose.onNodeWithTag("map-search").performImeAction()
@@ -111,15 +117,17 @@ class MapLayoutDeviceTest {
         assertEquals(searchField.left, frame.left, 1f)
         assertEquals(searchField.right, frame.right, 1f)
         assertEquals(12f, frame.left - searchRoot.left, 1f)
+        val toolbar = compose.onNodeWithTag("map-toolbar").fetchSemanticsNode().boundsInRoot
+        assertTrue("Actions must sit above search", toolbar.bottom <= searchField.top)
+        assertTrue(compose.onNodeWithTag("map-saved-places").fetchSemanticsNode().boundsInRoot.right <
+            compose.onNodeWithContentDescription("Map information").fetchSemanticsNode().boundsInRoot.left)
+        compose.onNodeWithContentDescription("Change test theme").assertIsDisplayed()
         compose.onNodeWithText("Luz restaurant").performClick()
         compose.onNodeWithTag("map-results").assertDoesNotExist()
         compose.onNodeWithTag("map-save").assertIsDisplayed()
         compose.onNodeWithTag("map-search").assertIsNotFocused()
         val search = compose.onNodeWithTag("map-search").fetchSemanticsNode().boundsInRoot
-        val selectedControls = compose.onNodeWithTag("map-controls").fetchSemanticsNode().boundsInRoot
-        val savedAction = compose.onNodeWithTag("map-saved-places").fetchSemanticsNode().boundsInRoot
         assertEquals(48f, search.height, 1f) // Fixture uses 160 dpi and the standard text scale.
-        assertEquals(selectedControls.center.x, savedAction.center.x, 1f)
         compose.waitUntil(10_000) {
             val safe = compose.onNodeWithTag("map-safe-content").fetchSemanticsNode().boundsInRoot
             val sheet = compose.onNodeWithTag("map-card-surround").fetchSemanticsNode().boundsInRoot
@@ -134,7 +142,8 @@ class MapLayoutDeviceTest {
         assertEquals(safeMap.bottom + 8f, surround.top, 1f)
         assertEquals(card.left - surround.left, card.top - surround.top, 1f)
         assertEquals(12f, root.bottom - map.bottom, 1f)
-        assertEquals(card.center.x, compose.onNodeWithTag("map-save").fetchSemanticsNode().boundsInRoot.center.x, 1f)
+        assertTrue(compose.onNodeWithTag("map-save").fetchSemanticsNode().boundsInRoot.bottom <=
+            compose.onNodeWithTag("place-detail-name").fetchSemanticsNode().boundsInRoot.top)
         assertTrue(saved.isEmpty())
         compose.onNodeWithTag("map-save").performClick()
         assertEquals(listOf(Triple("luz-id", "Luz", "Via Giuseppe Re David, 32, 70126 Bari BA, Italy")), saved)
@@ -147,6 +156,8 @@ class MapLayoutDeviceTest {
         compose.onNodeWithContentDescription("Expand map").performClick()
         compose.onNodeWithTag("map-search").assertDoesNotExist()
         compose.onNodeWithTag("map-save").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Change test theme").performClick()
+        assertEquals(1, themeChanges)
         assertTrue(compose.onNodeWithTag("map-viewport").fetchSemanticsNode().boundsInRoot.height > initialHeight)
         device.pressBack()
         compose.onNodeWithTag("map-search").assertIsDisplayed()
@@ -165,11 +176,24 @@ class MapLayoutDeviceTest {
     @Test fun draggingTheSheetLoadsDetailsOnceAndBackAndCloseKeepMapUsable() {
         selectPlace()
         assertTrue(lookup.richCalls.isEmpty())
-        val viewportBeforeDrag = compose.onNodeWithTag("map-viewport").fetchSemanticsNode().boundsInRoot
+        val viewportBeforeDrag = compose.onNodeWithTag("map-sheet-viewport").fetchSemanticsNode().boundsInRoot
         val sheetBeforeDrag = compose.onNodeWithTag("map-card-surround").fetchSemanticsNode().boundsInRoot
-        compose.onNodeWithTag("map-card-surround").performTouchInput {
-            // Drag to the map's top: full-height expansion travels farther than the previous 75% sheet.
-            swipe(Offset(center.x, 28f), Offset(center.x, viewportBeforeDrag.top + 24f - sheetBeforeDrag.top), durationMillis = 500)
+        val nameBefore = compose.onNodeWithTag("place-detail-name").fetchSemanticsNode().boundsInRoot
+        val addressBefore = compose.onNodeWithTag("place-detail-address").fetchSemanticsNode().boundsInRoot
+        val inputRoot = compose.onRoot().fetchSemanticsNode().boundsInRoot
+        val start = Offset(sheetBeforeDrag.center.x - inputRoot.left, sheetBeforeDrag.top + 28f - inputRoot.top)
+        val end = Offset(start.x, viewportBeforeDrag.top + 24f - inputRoot.top)
+        compose.onRoot().performTouchInput {
+            down(start)
+            moveTo((start + end) / 2f, delayMillis = 250)
+        }
+        assertEquals(viewportBeforeDrag.height,
+            compose.onNodeWithTag("map-sheet-viewport").fetchSemanticsNode().boundsInRoot.height, 1f)
+        assertTrue("The card must actually follow the drag", compose.onNodeWithTag("map-card-surround")
+            .fetchSemanticsNode().boundsInRoot.top < sheetBeforeDrag.top - 40f)
+        compose.onRoot().performTouchInput {
+            moveTo(end, delayMillis = 250)
+            up()
         }
         try {
             compose.waitUntil(10_000) { compose.onAllNodesWithTag("map-place-details").fetchSemanticsNodes().isNotEmpty() }
@@ -181,6 +205,15 @@ class MapLayoutDeviceTest {
         compose.onNodeWithTag("map-search").assertDoesNotExist()
         compose.onAllNodesWithText("Luz").assertCountEquals(1)
         compose.onAllNodesWithText("Via Giuseppe Re David, 32, 70126 Bari BA, Italy").assertCountEquals(1)
+        assertEquals(viewportBeforeDrag.height,
+            compose.onNodeWithTag("map-sheet-viewport").fetchSemanticsNode().boundsInRoot.height, 1f)
+        val expandedSurround = compose.onNodeWithTag("map-card-surround").fetchSemanticsNode().boundsInRoot
+        val nameAfter = compose.onNodeWithTag("place-detail-name").fetchSemanticsNode().boundsInRoot
+        val addressAfter = compose.onNodeWithTag("place-detail-address").fetchSemanticsNode().boundsInRoot
+        assertEquals(nameBefore.height, nameAfter.height, 1f)
+        assertEquals(nameBefore.left, nameAfter.left, 1f)
+        assertEquals(nameBefore.top - sheetBeforeDrag.top, nameAfter.top - expandedSurround.top, 1f)
+        assertEquals(addressBefore.top - nameBefore.top, addressAfter.top - nameAfter.top, 1f)
         val root = compose.onNodeWithTag("map-layout").fetchSemanticsNode().boundsInRoot
         val card = compose.onNodeWithTag("map-place-card").fetchSemanticsNode().boundsInRoot
         assertEquals(root.top + 12f, card.top, 1f)
@@ -188,11 +221,25 @@ class MapLayoutDeviceTest {
         val toolbar = compose.onNodeWithTag("place-details-toolbar").fetchSemanticsNode().boundsInRoot
         assertTrue("Expanded toolbar should be slim", toolbar.height <= 80f)
         compose.onNodeWithContentDescription("Google Maps").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Change test theme").performClick()
+        assertEquals(1, themeChanges)
         compose.onNodeWithText("★ 4.5 · 12 ratings").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("Monday: 09:00–17:00").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Monday: 07:00–09:00, 11:00–14:00, 16:00–18:00, 20:00–22:00").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Refresh details").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithTag("place-detail-name").assertIsNotDisplayed()
-        compose.onNodeWithTag("place-detail-address").assertIsNotDisplayed()
+        // Scroll the actual body to its end, rather than just bringing one lower action into view.
+        compose.onRoot().performTouchInput {
+            swipe(Offset(card.center.x - inputRoot.left, card.bottom - 40f - inputRoot.top),
+                Offset(card.center.x - inputRoot.left, toolbar.bottom + 24f - inputRoot.top), durationMillis = 500)
+        }
+        try {
+            compose.onNodeWithTag("place-detail-name").assertIsNotDisplayed()
+            compose.onNodeWithTag("place-detail-address").assertIsNotDisplayed()
+        } catch (failure: AssertionError) {
+            val body = compose.onNodeWithTag("map-place-details").fetchSemanticsNode()
+            throw AssertionError("Heading remains visible after body swipe: card=$card, toolbar=$toolbar, " +
+                "body=${body.boundsInRoot}, name=${compose.onNodeWithTag("place-detail-name").fetchSemanticsNode().boundsInRoot}\n" +
+                compose.onRoot(useUnmergedTree = true).printToString(), failure)
+        }
         compose.onNodeWithTag("map-save").assertIsDisplayed()
         assertEquals(toolbar.top, compose.onNodeWithTag("place-details-toolbar").fetchSemanticsNode().boundsInRoot.top, 1f)
         assertEquals(listOf("luz-id"), lookup.richCalls)
@@ -246,7 +293,9 @@ class MapLayoutDeviceTest {
         override suspend fun moreDetails(id: String): PlaceDetails {
             richCalls += id
             return PlaceDetails(photos = listOf(PlacePhoto("content://com.famiglia.tripcompanion.test/preview")), rating = 4.5, ratingCount = 12, openNow = true,
-                hours = listOf("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday").map { "$it: 09:00–17:00" })
+                // Multiple daily service windows exercise wrapped hours and guarantee real scroll overflow.
+                hours = listOf("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+                    .map { "$it: 07:00–09:00, 11:00–14:00, 16:00–18:00, 20:00–22:00" })
         }
         override suspend fun search(query: String): List<PlaceSuggestion> {
             searches += query

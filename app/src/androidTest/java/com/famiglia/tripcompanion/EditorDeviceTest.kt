@@ -29,13 +29,26 @@ class EditorDeviceTest {
     }
 
     @After fun restoreDisplay() {
-        device.executeShellCommand("wm size reset")
-        device.executeShellCommand("wm density reset")
+        try {
+            if (compose.onAllNodesWithText("Cancel").fetchSemanticsNodes().isNotEmpty()) {
+                compose.onNodeWithText("Cancel").performClick()
+                compose.waitUntil(15_000) { compose.onAllNodesWithText("Cancel").fetchSemanticsNodes().isEmpty() }
+            }
+        } finally {
+            device.executeShellCommand("wm size reset")
+            device.executeShellCommand("wm density reset")
+        }
+    }
+
+    private fun openTripEditor() {
+        compose.onNodeWithText("New trip").performClick()
+        // The dialog owns another Android window; await its content before typing.
+        compose.waitUntil(15_000) { compose.onAllNodesWithText("Destination").fetchSemanticsNodes().isNotEmpty() }
     }
 
     @Test fun emptyHomeOpensTripEditorAndShowsValidation() {
         compose.onNodeWithText("Your next chapter starts here").assertIsDisplayed()
-        compose.onNodeWithText("New trip").performClick()
+        openTripEditor()
         compose.onNodeWithText("Save").performClick()
         compose.onNodeWithText("Enter a destination.").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Cancel").performClick()
@@ -43,7 +56,7 @@ class EditorDeviceTest {
     }
 
     @Test fun tripCreationShowsSavedTripAndSurvivesActivityRecreation() {
-        compose.onNodeWithText("New trip").performClick()
+        openTripEditor()
         compose.onNodeWithText("Destination").performTextInput("Bari")
         compose.onNodeWithText("Save").performClick()
         compose.waitUntil(15_000) { compose.onAllNodesWithText("Bari").fetchSemanticsNodes().isNotEmpty() }
@@ -54,9 +67,10 @@ class EditorDeviceTest {
     }
 
     @Test fun editorDraftSurvivesActivityRecreation() {
-        compose.onNodeWithText("New trip").performClick()
+        openTripEditor()
         compose.onNodeWithText("Destination").performTextInput("Florence")
         compose.activityRule.scenario.recreate()
+        compose.waitUntil(15_000) { compose.onAllNodesWithText("Florence").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("Florence").assertExists()
         compose.onNodeWithText("A new adventure").assertIsDisplayed()
     }
