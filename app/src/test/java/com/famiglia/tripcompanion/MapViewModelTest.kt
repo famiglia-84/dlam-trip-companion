@@ -231,7 +231,124 @@ class MapViewModelTest {
         assertEquals("cafe-id review", model.state.value.reviews!!.reviews.single().text)
     }
 
+    @Test fun closingAPlaceDoesNotRefitSavedPinsOrRequestAnotherCameraMove() = runTest {
+        model.loadSavedPlaces(listOf(Place(name = "First", googlePlaceId = "first"), Place(name = "Far away", googlePlaceId = "second")))
+        runCurrent()
+        val fit = model.state.value.cameraRequest!!
+        assertEquals(listOf("first", "second"), fit.locations.map { it.id })
+        model.cameraHandled(fit.sequence)
+        model.select("first"); runCurrent()
+        val focus = model.state.value.cameraRequest!!
+        assertEquals(listOf("first"), focus.locations.map { it.id })
+        model.cameraHandled(focus.sequence)
+        model.updateViewport(MapArea(41.12, 16.92, 1000.0))
+        model.dismissSelection(); runCurrent()
+        assertNull(model.state.value.cameraRequest)
+        assertEquals(2, model.state.value.pins.size)
+        assertEquals(MapArea(41.12, 16.92, 1000.0), model.state.value.viewport)
+        model.select("second"); runCurrent()
+        assertTrue(model.state.value.cameraRequest!!.sequence > focus.sequence)
+        model.cameraHandled(focus.sequence) // A cancelled older animation cannot consume the new command.
+        assertNotNull(model.state.value.cameraRequest)
+        model.dismissSelection()
+        assertNull(model.state.value.cameraRequest)
+    }
+
+    @Test fun discoveryIsExplicitBoundedAndUsesTheLatestAreaWithoutMovingTheCamera() = runTest {
+        val first = MapArea(41.1, 16.9, 1200.0)
+        val second = MapArea(41.2, 16.9, 2000.0)
+        model.updateViewport(first); runCurrent()
+        assertTrue(lookup.nearbyCalls.isEmpty())
+        model.discover(NearbyCategory.Cafes); runCurrent()
+        assertEquals(listOf(NearbyCategory.Cafes to first), lookup.nearbyCalls)
+        assertEquals(20, model.state.value.nearbyPins.size)
+        assertFalse(model.state.value.areaChanged)
+        assertNull(model.state.value.cameraRequest)
+        model.updateViewport(second); runCurrent()
+        assertEquals(1, lookup.nearbyCalls.size)
+        assertTrue(model.state.value.areaChanged)
+        model.searchThisArea(); runCurrent()
+        assertEquals(NearbyCategory.Cafes to second, lookup.nearbyCalls.last())
+        assertFalse(model.state.value.areaChanged)
+        model.select("nearby-0"); runCurrent()
+        assertTrue(lookup.detailsCalls.isEmpty()) // Basic details already arrived with the nearby search.
+        assertEquals("nearby-0", model.state.value.selected?.id)
+        model.dismissSelection()
+        assertEquals(20, model.state.value.nearbyPins.size)
+        assertNull(model.state.value.cameraRequest)
+    }
+
+    @Test fun oversizedAreasAndUnavailableMapsDoNotMakeNearbyRequests() = runTest {
+        model.discover(NearbyCategory.Restaurants); runCurrent()
+        assertNotNull(model.state.value.nearbyMessage)
+        model.updateViewport(MapArea(0.0, 0.0, 50_001.0))
+        model.discover(NearbyCategory.Restaurants); runCurrent()
+        assertTrue(model.state.value.nearbyMessage!!.contains("Zoom in"))
+        model.updateViewport(MapArea(Double.NaN, 0.0, 500.0))
+        model.discover(NearbyCategory.Restaurants); runCurrent()
+        assertTrue(lookup.nearbyCalls.isEmpty())
+    }
+
+    @Test fun clearingDiscoveryPreservesSavedPinsAndCancelsLateResults() = runTest {
+        model.loadSavedPlaces(listOf(Place(name = "Private", notes = "Booking secret", googlePlaceId = "saved-id"))); runCurrent()
+        val gate = CompletableDeferred<Unit>()
+        lookup.nearbyBarrier = gate
+        model.updateViewport(MapArea(41.1, 16.9, 1500.0))
+        model.discover(NearbyCategory.Parks); runCurrent()
+        model.discover(NearbyCategory.Parks); runCurrent()
+        assertEquals(1, lookup.nearbyCalls.size)
+        model.clearNearby()
+        gate.complete(Unit); runCurrent()
+        assertNull(model.state.value.nearbyCategory)
+        assertTrue(model.state.value.nearbyPins.isEmpty())
+        assertEquals("saved-id", model.state.value.pins.single().id)
+        assertFalse(model.state.value.busy)
+        assertTrue(lookup.queries.isEmpty())
+    }
+
+    @Test fun nearbyFailuresAndEmptyResultsCanBeRetriedWithoutLeakingRequests() = runTest {
+        model.updateViewport(MapArea(41.1, 16.9, 1000.0))
+        lookup.nearbyFailure = true
+        model.discover(NearbyCategory.Attractions); runCurrent()
+        assertNotNull(model.state.value.message)
+        assertFalse(model.state.value.message!!.contains("private request"))
+        assertFalse(model.state.value.busy)
+        lookup.nearbyFailure = false
+        lookup.nearbyEmpty = true
+        model.discover(NearbyCategory.Attractions); runCurrent()
+        assertNull(model.state.value.message)
+        assertTrue(model.state.value.nearbyMessage!!.contains("No attractions"))
+        model.changeQuery("Bari")
+        assertNull(model.state.value.nearbyCategory)
+        assertTrue(model.state.value.nearbyPins.isEmpty())
+        assertTrue(lookup.queries.isEmpty())
+    }
+
+    @Test fun movingTheAreaWhileSearchingOffersAnExplicitRefreshForThatNewArea() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        lookup.nearbyBarrier = gate
+        val first = MapArea(41.1, 16.9, 1000.0)
+        model.updateViewport(first)
+        model.discover(NearbyCategory.Shopping); runCurrent()
+        model.updateViewport(MapArea(42.0, 16.9, 1000.0))
+        gate.complete(Unit); runCurrent()
+        assertEquals(first, model.state.value.searchedArea)
+        assertTrue(model.state.value.areaChanged)
+        assertEquals(1, lookup.nearbyCalls.size)
+    }
+
     private class FakeLookup : PlaceLookup {
+        val nearbyCalls = mutableListOf<Pair<NearbyCategory, MapArea>>()
+        var nearbyBarrier: CompletableDeferred<Unit>? = null
+        var nearbyFailure = false
+        var nearbyEmpty = false
+        override suspend fun nearby(category: NearbyCategory, area: MapArea): List<MapLocation> {
+            nearbyCalls += category to area
+            val gate = nearbyBarrier
+            if (gate != null) withContext(NonCancellable) { gate.await() }
+            if (nearbyFailure) error("private request")
+            return if (nearbyEmpty) emptyList() else (0..25).map { MapLocation("nearby-$it", "Place $it", "Public address", area.latitude, area.longitude) }
+        }
         val queries = mutableListOf<String>()
         val detailsCalls = mutableListOf<Pair<String, Boolean>>()
         var barrier: CompletableDeferred<Unit>? = null

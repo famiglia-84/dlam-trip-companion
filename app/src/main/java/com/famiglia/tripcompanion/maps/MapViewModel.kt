@@ -28,6 +28,13 @@ data class MapSearchState(
     val reviews: PlaceReviews? = null,
     val reviewsBusy: Boolean = false,
     val reviewsMessage: String? = null,
+    val nearbyCategory: NearbyCategory? = null,
+    val nearbyPins: List<MapLocation> = emptyList(),
+    val viewport: MapArea? = null,
+    val searchedArea: MapArea? = null,
+    val areaChanged: Boolean = false,
+    val nearbyMessage: String? = null,
+    val cameraRequest: MapCameraRequest? = null,
 )
 
 class MapViewModel(
@@ -49,6 +56,51 @@ class MapViewModel(
     private var detailsLoadedAt = 0L
     private var hasScope = false
     private var activeScope: Long? = null
+    private var cameraSequence = 0L
+
+    fun updateViewport(area: MapArea) {
+        val searched = _state.value.searchedArea
+        _state.value = _state.value.copy(viewport = area, areaChanged = searched != null && area.differsFrom(searched))
+    }
+
+    fun discover(category: NearbyCategory) {
+        if (_state.value.busy) return
+        val area = _state.value.viewport
+        if (area == null || !area.searchable) {
+            _state.value = _state.value.copy(nearbyMessage = if (area == null) "Wait for the map to load, then choose a category."
+                else "Zoom in to search a smaller area (up to 50 km from its centre).")
+            return
+        }
+        resetDetails()
+        _state.value = _state.value.copy(selected = null, suggestions = emptyList(), nearbyCategory = category,
+            nearbyPins = emptyList(), nearbyMessage = null, cameraRequest = null)
+        execute { provider ->
+            val locations = provider.nearby(category, area).distinctBy { it.id }.take(20)
+            kotlin.coroutines.coroutineContext.ensureActive()
+            _state.value = _state.value.copy(nearbyPins = locations, searchedArea = area,
+                areaChanged = _state.value.viewport?.differsFrom(area) == true,
+                nearbyMessage = if (locations.isEmpty()) "No ${category.label.lowercase()} found here. Try another area or category."
+                    else "${locations.size} nearby results · tap a pin for details")
+        }
+    }
+
+    fun searchThisArea() { _state.value.nearbyCategory?.let(::discover) }
+
+    fun clearNearby() {
+        request?.cancel()
+        _state.value = _state.value.copy(nearbyCategory = null, nearbyPins = emptyList(), searchedArea = null,
+            areaChanged = false, nearbyMessage = null, busy = false)
+    }
+
+    fun cameraHandled(sequence: Long) {
+        if (_state.value.cameraRequest?.sequence == sequence) _state.value = _state.value.copy(cameraRequest = null)
+    }
+
+    private fun focusCamera(locations: List<MapLocation>) {
+        _state.value = _state.value.copy(cameraRequest = locations.takeIf { it.isNotEmpty() }?.let {
+            MapCameraRequest(++cameraSequence, it.toList())
+        })
+    }
 
     fun activateScope(id: Long?) {
         if (!hasScope || activeScope != id) {
@@ -59,13 +111,15 @@ class MapViewModel(
     }
 
     fun changeQuery(value: String) {
+        clearNearby()
         resetDetails()
         request?.cancel()
         saved["mapQuery"] = value
-        _state.value = _state.value.copy(suggestions = emptyList(), selected = null, busy = false, message = null)
+        _state.value = _state.value.copy(suggestions = emptyList(), selected = null, busy = false, message = null, cameraRequest = null)
     }
 
     fun search() {
+        clearNearby()
         resetDetails()
         val text = query.value.trim()
         if (text.isEmpty()) {
@@ -83,24 +137,27 @@ class MapViewModel(
     fun select(id: String, fromSearch: Boolean = false) {
         if (_state.value.selected?.id != id) resetDetails()
         val saveLabel = if (fromSearch) query.value else ""
-        val loaded = if (fromSearch) null else (_state.value.pins + listOfNotNull(_state.value.selected)).firstOrNull { it.id == id }
+        val loaded = if (fromSearch) null else (_state.value.pins + _state.value.nearbyPins + listOfNotNull(_state.value.selected)).firstOrNull { it.id == id }
         if (loaded != null) {
             request?.cancel()
             _state.value = _state.value.copy(selected = loaded, saveLabel = saveLabel, suggestions = emptyList(), busy = false, message = null)
+            focusCamera(listOf(loaded))
         } else {
-            _state.value = _state.value.copy(selected = null)
+            _state.value = _state.value.copy(selected = null, cameraRequest = null)
             execute {
                 val location = it.details(id, fromSearch)
                 kotlin.coroutines.coroutineContext.ensureActive()
                 _state.value = _state.value.copy(selected = location, saveLabel = saveLabel, suggestions = emptyList())
+                focusCamera(listOf(location))
             }
         }
     }
 
     fun loadSavedPlaces(places: List<Place>) {
+        clearNearby()
         resetDetails()
         val ids = places.mapNotNull { it.googlePlaceId }.distinct().take(50)
-        _state.value = _state.value.copy(selected = null, suggestions = emptyList(), pins = emptyList())
+        _state.value = _state.value.copy(selected = null, suggestions = emptyList(), pins = emptyList(), cameraRequest = null)
         execute { provider ->
             // Sequential requests keep concurrency and unexpected billing bounded.
             val pins = mutableListOf<MapLocation>()
@@ -109,6 +166,7 @@ class MapViewModel(
                 try { pins += provider.details(id) }
                 catch (e: CancellationException) { throw e }
                 catch (_: Exception) { failures++ }
+                kotlin.coroutines.coroutineContext.ensureActive()
                 _state.value = _state.value.copy(pins = pins.toList())
             }
             _state.value = _state.value.copy(pins = pins, message = when {
@@ -117,19 +175,20 @@ class MapViewModel(
                 ids.isEmpty() -> "Search for a place and save a Google Maps link first."
                 else -> null
             })
+            focusCamera(pins)
         }
     }
 
     fun clearMap() {
         resetDetails()
         request?.cancel()
-        _state.value = MapSearchState()
+        _state.value = MapSearchState(viewport = _state.value.viewport)
     }
 
     fun dismissSelection() {
         request?.cancel()
         resetDetails()
-        _state.value = _state.value.copy(selected = null, busy = false, message = null)
+        _state.value = _state.value.copy(selected = null, busy = false, message = null, cameraRequest = null)
     }
 
     /** Visible rows fetch one photo, serially; references stay in bounded, short-lived memory. */
@@ -219,6 +278,7 @@ class MapViewModel(
             try { action(provider) }
             catch (e: CancellationException) { throw e }
             catch (_: Exception) {
+                kotlin.coroutines.coroutineContext.ensureActive()
                 // SDK exceptions can contain request details: keep them out of the UI and logs.
                 _state.value = _state.value.copy(message = "Could not load Google Places. Check your connection or Maps configuration and retry.")
             }

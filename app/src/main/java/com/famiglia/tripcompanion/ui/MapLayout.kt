@@ -16,6 +16,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
@@ -52,6 +53,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.famiglia.tripcompanion.data.Place
 import com.famiglia.tripcompanion.maps.MapLocation
 import com.famiglia.tripcompanion.maps.MapViewModel
+import com.famiglia.tripcompanion.maps.NearbyCategory
 
 /** Map controls stay independent of the SDK renderer so layout can be checked without live requests. */
 @Composable
@@ -180,13 +182,24 @@ internal fun MapLayout(
                     Column(Modifier.fillMaxWidth().onSizeChanged { controlsHeight = it.height }
                         .graphicsLayer { alpha = if (detailsExpanded) 0f else 1f }) {
                         if (!expandedMap) MapControls(query, model::changeQuery, !state.busy, shortWindow,
-                            ::search, ::savedPlaces, { dismissKeyboard(); showInfo = true }, ::expand, appearance)
-                        val message = state.message ?: if (mapSlow) "The map has not loaded. Check your connection and Maps configuration, then reopen this screen." else null
+                            ::search, ::savedPlaces, { dismissKeyboard(); showInfo = true }, ::expand, appearance,
+                            category = state.nearbyCategory, showDiscovery = !shortWindow || state.selected == null,
+                            discover = { dismissKeyboard(); model.discover(it) }, clearNearby = model::clearNearby)
+                        if (state.areaChanged && state.nearbyCategory != null && state.selected == null) {
+                            GlassSurface(Modifier.align(Alignment.CenterHorizontally).padding(bottom = 4.dp), shape = RoundedCornerShape(24.dp)) {
+                                TextButton(onClick = { dismissKeyboard(); model.searchThisArea() }, enabled = !state.busy,
+                                    modifier = Modifier.heightIn(min = 48.dp).testTag("map-search-area")) {
+                                    Icon(Icons.Default.Search, null, Modifier.size(24.dp)); Spacer(Modifier.width(8.dp))
+                                    Text("Search this area")
+                                }
+                            }
+                        }
+                        val message = state.message ?: state.nearbyMessage?.takeIf { state.selected == null } ?: if (mapSlow) "The map has not loaded. Check your connection and Maps configuration, then reopen this screen." else null
                         if (message != null) GlassSurface(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                             Text(message, Modifier.padding(12.dp).testTag("map-message"), style = MaterialTheme.typography.bodySmall)
                         }
                         if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
-                        val credits = (state.pins + listOfNotNull(state.selected)).flatMap(MapLocation::attributions).distinct()
+                        val credits = (state.pins + state.nearbyPins + listOfNotNull(state.selected)).flatMap(MapLocation::attributions).distinct()
                         if (credits.isNotEmpty()) Surface(shape = RoundedCornerShape(12.dp)) {
                             PlaceAttributions(credits)
                         }
@@ -236,7 +249,8 @@ internal fun MapLayout(
 @Composable
 private fun MapControls(query: String, changeQuery: (String) -> Unit, enabled: Boolean, shortWindow: Boolean,
     search: () -> Unit, savedPlaces: () -> Unit, information: () -> Unit, expand: () -> Unit,
-    appearance: (@Composable () -> Unit)?) {
+    appearance: (@Composable () -> Unit)?, category: NearbyCategory?, showDiscovery: Boolean,
+    discover: (NearbyCategory) -> Unit, clearNearby: () -> Unit) {
     var showOptions by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth().testTag("map-controls").padding(horizontal = 8.dp, vertical = 8.dp)) {
         GlassSurface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp)) {
@@ -266,6 +280,17 @@ private fun MapControls(query: String, changeQuery: (String) -> Unit, enabled: B
         }
         Spacer(Modifier.height(8.dp))
         MapSearchField(query, changeQuery, enabled, search, Modifier.fillMaxWidth())
+        if (showDiscovery) {
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).testTag("map-categories"),
+                horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                NearbyCategory.entries.forEach { option ->
+                    FilterChip(selected = category == option, onClick = { discover(option) }, enabled = enabled,
+                        label = { Text(option.label) }, modifier = Modifier.heightIn(min = 48.dp).testTag("nearby-${option.name}"))
+                }
+                if (category != null) TextButton(onClick = clearNearby, enabled = enabled,
+                    modifier = Modifier.heightIn(min = 48.dp).testTag("nearby-clear")) { Text("Clear") }
+            }
+        }
     }
 }
 
@@ -306,7 +331,8 @@ private fun MapInformation(dismiss: () -> Unit) {
         text = {
             Column(Modifier.heightIn(max = 300.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("Search or tap a named place on the map, then choose Save place. Review or edit its name and address before confirming. Zoom in to reveal more places. Blank map areas are not selectable.")
-                Text("Google receives map requests, your search text and selected place IDs. Booking codes and private notes stay here.")
+                Text("Choose a category to discover up to 20 nearby places around the visible map. Move or zoom the map, then tap Search this area to refresh. Zoom in if the visible area is too large. Clear removes discovery results; saved pins stay. Moving the map alone makes no search request.")
+                Text("Google receives map requests, your search text, selected place IDs and the map area/category you choose to search. Device location is not accessed. Booking codes and private notes stay here.")
                 Text("Drag the place card up, or use its expand button, for photos, ratings, hours and actions. Tap the rating row to read a selection of Google reviews. Street View opens an interactive panorama when imagery is available; drag only its top handle to move the card. Directions opens Google Maps. Tap a saved place's thumbnail to find it on this map.")
                 Text("Google photos, expanded details, reviews and Street View load online and may incur Google Maps Platform charges. Reviews and panoramas load only when you open them. You can choose your own photo in the save dialog; it stays with your selected photo provider and is not uploaded to Google Maps.")
                 Text("Maps and Google place details need a connection. Your saved travel records remain available offline.")

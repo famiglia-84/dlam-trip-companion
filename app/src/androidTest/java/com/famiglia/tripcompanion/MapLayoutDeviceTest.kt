@@ -514,7 +514,58 @@ class MapLayoutDeviceTest {
         assertEquals(listOf(Triple("luz-id", "Luz", "Via Giuseppe Re David, 32, 70126 Bari BA, Italy")), saved)
     }
 
+    @Test fun discoveryChipsSearchTheVisibleAreaAndKeepMapInputAndSelectionUsable() {
+        val first = MapArea(41.1, 16.9, 1500.0)
+        compose.runOnIdle { model.updateViewport(first) }
+        compose.onNodeWithTag("nearby-Restaurants").assertIsDisplayed().performClick()
+        compose.waitUntil(10_000) { model.state.value.nearbyPins.size == 1 }
+        assertEquals(listOf(NearbyCategory.Restaurants to first), lookup.nearbyCalls)
+        compose.onNodeWithTag("nearby-Restaurants").assertIsSelected()
+        compose.onNodeWithTag("map-search-area").assertDoesNotExist()
+        val moved = MapArea(41.15, 16.9, 1800.0)
+        compose.runOnIdle { model.updateViewport(moved) }
+        compose.onNodeWithTag("map-search-area").assertIsDisplayed().performClick()
+        compose.waitUntil(10_000) { lookup.nearbyCalls.size == 2 }
+        assertEquals(NearbyCategory.Restaurants to moved, lookup.nearbyCalls.last())
+        compose.onNodeWithTag("map-search-area").assertDoesNotExist()
+        // Exercise physical native input with the new discovery surfaces above it.
+        touchMapControls()
+        compose.onNodeWithTag("map-safe-content").performTouchInput { click(center) }
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("map-save").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithContentDescription("Close place").performClick()
+        compose.onNodeWithTag("map-search").assertIsDisplayed()
+        compose.runOnIdle {
+            assertNull(model.state.value.cameraRequest)
+            assertEquals(moved, model.state.value.viewport)
+            assertEquals(1, model.state.value.nearbyPins.size)
+        }
+        compose.onNodeWithTag("nearby-clear").performScrollTo().performClick()
+        compose.runOnIdle { assertTrue(model.state.value.nearbyPins.isEmpty()) }
+        compose.onNodeWithTag("nearby-Restaurants").assertIsNotSelected()
+    }
+
+    @Test fun discoveryInAShortWindowCanSearchWithoutCoveringTheNativeMap() {
+        device.executeShellCommand("wm size 400x520")
+        compose.waitUntil(10_000) { compose.onAllNodesWithContentDescription("Map options").fetchSemanticsNodes().isNotEmpty() }
+        compose.runOnIdle { model.updateViewport(MapArea(41.1, 16.9, 1000.0)) }
+        compose.onNodeWithTag("nearby-Cafes").assertIsDisplayed().performClick()
+        compose.waitUntil(10_000) { model.state.value.nearbyPins.size == 1 }
+        val safe = compose.onNodeWithTag("map-safe-content").fetchSemanticsNode().boundsInRoot
+        assertTrue("Nearby controls must leave usable map space in a short window: $safe", safe.height >= 100f)
+        compose.runOnIdle { model.select("luz-id") }
+        compose.onNodeWithTag("map-save").assertIsDisplayed()
+        compose.onNodeWithTag("map-categories").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Close place").performClick()
+        compose.onNodeWithTag("nearby-Cafes").assertIsDisplayed()
+    }
+
     private class FakePlaces : PlaceLookup {
+        val nearbyCalls = mutableListOf<Pair<NearbyCategory, MapArea>>()
+        override suspend fun nearby(category: NearbyCategory, area: MapArea): List<MapLocation> {
+            nearbyCalls += category to area
+            return listOf(MapLocation("luz-id", "Luz", "Via Giuseppe Re David, 32, 70126 Bari BA, Italy",
+                41.1, 16.9, category = "Restaurant"))
+        }
         var limitedDetails = false
         val searches = mutableListOf<String>()
         val richCalls = mutableListOf<String>()

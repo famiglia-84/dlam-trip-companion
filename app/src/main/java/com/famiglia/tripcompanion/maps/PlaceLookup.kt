@@ -9,6 +9,9 @@ import com.google.android.libraries.places.api.model.Place
 import com.google.android.libraries.places.api.net.FetchPlaceRequest
 import com.google.android.libraries.places.api.net.FindAutocompletePredictionsRequest
 import com.google.android.libraries.places.api.net.FetchResolvedPhotoUriRequest
+import com.google.android.libraries.places.api.net.SearchNearbyRequest
+import com.google.android.libraries.places.api.model.CircularBounds
+import com.google.android.gms.maps.model.LatLng
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 
@@ -35,13 +38,14 @@ data class PlaceDetails(
     val photosUnavailable: Boolean = false,
 )
 
-/** This boundary accepts only explicit search text or place IDs, never travel records. */
+/** Only explicit search text, place IDs and map areas cross this boundary, never travel records. */
 interface PlaceLookup {
     suspend fun search(query: String): List<PlaceSuggestion>
     suspend fun details(id: String, fromSearch: Boolean = false): MapLocation
     suspend fun thumbnail(id: String): PlacePhoto? = null
     suspend fun moreDetails(id: String): PlaceDetails = PlaceDetails()
     suspend fun reviews(id: String): PlaceReviews = PlaceReviews()
+    suspend fun nearby(category: NearbyCategory, area: MapArea): List<MapLocation> = emptyList()
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -75,6 +79,24 @@ class GooglePlaceLookup private constructor(private val context: Context, privat
         val location = requireNotNull(place.location) { "This place has no map location." }
         return MapLocation(id, place.displayName.orEmpty(), place.formattedAddress.orEmpty(),
             location.latitude, location.longitude, place.attributions.orEmpty(), place.primaryTypeDisplayName.orEmpty())
+    }
+
+    override suspend fun nearby(category: NearbyCategory, area: MapArea): List<MapLocation> {
+        require(area.searchable)
+        val cancellation = CancellationTokenSource()
+        val request = SearchNearbyRequest.builder(
+            CircularBounds.newInstance(LatLng(area.latitude, area.longitude), area.radiusMeters),
+            listOf(Place.Field.ID, Place.Field.DISPLAY_NAME, Place.Field.FORMATTED_ADDRESS,
+                Place.Field.LOCATION, Place.Field.PRIMARY_TYPE_DISPLAY_NAME),
+        ).setIncludedTypes(category.placeTypes).setMaxResultCount(20)
+            .setRankPreference(SearchNearbyRequest.RankPreference.DISTANCE)
+            .setCancellationToken(cancellation.token).build()
+        return client.searchNearby(request).await(cancellation).places.mapNotNull { place ->
+            val id = place.id ?: return@mapNotNull null
+            val location = place.location ?: return@mapNotNull null
+            MapLocation(id, place.displayName.orEmpty(), place.formattedAddress.orEmpty(), location.latitude,
+                location.longitude, place.attributions.orEmpty(), place.primaryTypeDisplayName.orEmpty())
+        }
     }
 
     override suspend fun thumbnail(id: String): PlacePhoto? {
