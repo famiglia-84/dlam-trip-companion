@@ -1,5 +1,13 @@
 # Validation
 
+## Reviews and Street View, version 0.7.0
+
+The local unit suite has **52 tests**. New checks cover explicit review requests, transient caching of empty results, sanitized failures/retry, cancellation on close, rejection of late responses after selection changes, public panorama links, and native panorama lifecycle pairing across background/resume and early disposal. App, instrumentation compilation and lint use the retained JDK 21 / Gradle 8.13 / Android SDK 36 toolchain.
+
+Three additional native tests exercise Reviews entry/return with the original place scroll position, card/dock clearance, Street View tile order, actual Android View swipe delivery without moving its card, handle dismissal and restored map input, and empty/error/retry states. Providers and panorama/map views are controlled to avoid billed Google requests. The workflow must pass these and the existing 21 native tests before publishing a signed APK.
+
+Live review selection/attribution, real panorama coverage/imagery, Android key/billing configuration, external Google Maps links and physical Fold behavior need a device check. The tests do not certify Google's live responses or coverage. These features add no database migration or location permission.
+
 ## Place cards and photos, version 0.5.0
 
 All **45 local tests pass** with no failures/errors/skips. They include a Room schema-1-to-3 upgrade that preserves all travel tables, a schema-2-to-3 upgrade retaining linked places/custom labels/addresses/notes, personal-photo URI persistence, explicit richer-detail requests, cancellation of stale results, bounded thumbnail caching and public map-link construction. The app and instrumentation APKs compile with the pinned toolchain.

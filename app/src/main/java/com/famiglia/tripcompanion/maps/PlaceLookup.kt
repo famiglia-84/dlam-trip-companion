@@ -21,6 +21,13 @@ data class MapLocation(
 
 data class PhotoCredit(val name: String, val uri: String?)
 data class PlacePhoto(val uri: String, val credits: List<PhotoCredit> = emptyList(), val attributionHtml: String = "")
+data class PlaceReview(
+    val author: String, val authorUri: String? = null, val authorPhotoUri: String? = null,
+    val rating: Double? = null, val text: String = "", val relativeTime: String = "", val publishTime: String? = null,
+    val translated: Boolean = false, val attributionHtml: String = "", val flagUri: String? = null,
+)
+data class PlaceReviews(val reviews: List<PlaceReview> = emptyList(), val attributions: List<String> = emptyList())
+
 data class PlaceDetails(
     val photos: List<PlacePhoto> = emptyList(), val rating: Double? = null, val ratingCount: Int? = null,
     val hours: List<String> = emptyList(), val openNow: Boolean? = null,
@@ -34,6 +41,7 @@ interface PlaceLookup {
     suspend fun details(id: String, fromSearch: Boolean = false): MapLocation
     suspend fun thumbnail(id: String): PlacePhoto? = null
     suspend fun moreDetails(id: String): PlaceDetails = PlaceDetails()
+    suspend fun reviews(id: String): PlaceReviews = PlaceReviews()
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -93,6 +101,21 @@ class GooglePlaceLookup private constructor(private val context: Context, privat
         return PlaceDetails(photos, place.rating, place.userRatingCount,
             (place.currentOpeningHours ?: place.openingHours)?.weekdayText.orEmpty(),
             runCatching { place.isOpen }.getOrNull(), place.internationalPhoneNumber, place.websiteUri?.toString(), place.attributions.orEmpty(), photosUnavailable)
+    }
+
+    // Reviews belong to a higher billing tier: never include them in ordinary detail/photo requests.
+    override suspend fun reviews(id: String): PlaceReviews {
+        val cancellation = CancellationTokenSource()
+        val place = client.fetchPlace(FetchPlaceRequest.builder(id, listOf(Place.Field.REVIEWS))
+            .setCancellationToken(cancellation.token).build()).await(cancellation).place
+        return PlaceReviews(place.reviews.orEmpty().take(5).map { review ->
+            val author = review.authorAttribution
+            PlaceReview(author.name, author.uri, author.photoUri, review.rating,
+                review.text ?: review.originalText.orEmpty(), review.relativePublishTimeDescription.orEmpty(), review.publishTime,
+                translated = !review.textLanguageCode.isNullOrBlank() && !review.originalTextLanguageCode.isNullOrBlank() &&
+                    review.textLanguageCode != review.originalTextLanguageCode,
+                attributionHtml = review.attribution.orEmpty(), flagUri = review.flagContentUri?.toString())
+        }, place.attributions.orEmpty())
     }
 
     private suspend fun photo(metadata: com.google.android.libraries.places.api.model.PhotoMetadata, size: Int): PlacePhoto {

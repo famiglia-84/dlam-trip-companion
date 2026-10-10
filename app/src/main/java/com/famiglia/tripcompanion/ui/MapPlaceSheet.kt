@@ -17,6 +17,7 @@ import androidx.compose.material.icons.outlined.NearMe
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.Streetview
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -37,7 +38,7 @@ import com.famiglia.tripcompanion.maps.*
 @Composable
 internal fun MapPlaceSheet(selected: MapLocation, saved: Place?, model: MapViewModel, state: MapSearchState,
     height: Dp, compact: Boolean, expanded: Boolean, bottomClearance: Dp = 0.dp, toggle: () -> Unit, save: () -> Unit,
-    appearance: (@Composable () -> Unit)? = null, compactHeight: (Int) -> Unit = {}, unsave: (Place) -> Unit = {}) {
+    appearance: (@Composable () -> Unit)? = null, compactHeight: (Int) -> Unit = {}, unsave: (Place) -> Unit = {}, openFeature: (PlaceFeature) -> Unit = {}) {
     val localPhoto = saved?.photoUri.orEmpty()
     val thumbnail = rememberPlaceThumbnail(selected.id, localPhoto, model)
     val pinnedSave = !expanded && (compact || LocalDensity.current.fontScale > 1.3f)
@@ -101,7 +102,8 @@ internal fun MapPlaceSheet(selected: MapLocation, saved: Place?, model: MapViewM
                         }
                         if (expanded) Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            PlaceActions(selected, state.details, saved != null, state.busy) { if (saved != null) unsave(saved) else save() }
+                            PlaceActions(selected, state.details, saved != null, state.busy,
+                                streetView = { openFeature(PlaceFeature.StreetView) }) { if (saved != null) unsave(saved) else save() }
                             if (localPhoto.isNotBlank()) PlaceImage(localPhoto, null, selected.name, Modifier.fillMaxWidth().height(160.dp))
                             if (state.detailsBusy) { LinearProgressIndicator(Modifier.fillMaxWidth()); Text("Loading place details…") }
                             state.detailsMessage?.let { message ->
@@ -109,7 +111,7 @@ internal fun MapPlaceSheet(selected: MapLocation, saved: Place?, model: MapViewM
                                 TextButton(onClick = { model.loadDetails() }) { Text("Retry details") }
                             }
                             state.details?.let { details ->
-                                details.rating?.let { rating -> Text("★ $rating" + (details.ratingCount?.let { " · $it ratings" } ?: ""), style = MaterialTheme.typography.titleLarge) }
+                                RatingLink(details) { openFeature(PlaceFeature.Reviews) }
                                 details.openNow?.let { open -> Text(if (open) "Open now" else "Closed now",
                                     color = if (open) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface) }
                                 if (details.photos.isNotEmpty()) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -190,7 +192,7 @@ private fun PlaceSaveButton(busy: Boolean, saved: Boolean, save: () -> Unit) {
 }
 
 @Composable
-private fun PlaceActions(place: MapLocation, details: PlaceDetails?, saved: Boolean, busy: Boolean, save: () -> Unit) {
+private fun PlaceActions(place: MapLocation, details: PlaceDetails?, saved: Boolean, busy: Boolean, streetView: () -> Unit, save: () -> Unit) {
     val context = LocalContext.current
     fun open(intent: Intent) {
         try { context.startActivity(intent) }
@@ -201,6 +203,7 @@ private fun PlaceActions(place: MapLocation, details: PlaceDetails?, saved: Bool
             vertical = true, modifier = Modifier.testTag(if (saved) "map-saved-status" else "map-save"),
             enabled = !busy, emphasized = true, click = save)
         GlassAction("Directions", Icons.Outlined.NearMe, vertical = true, modifier = Modifier.testTag("map-directions")) { open(Intent(Intent.ACTION_VIEW, PlaceLinks.directions(place))) }
+        GlassAction("Street View", Icons.Outlined.Streetview, vertical = true, modifier = Modifier.testTag("map-street-view"), click = streetView)
         GlassAction("Share", Icons.Outlined.Share, vertical = true) {
             open(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, PlaceLinks.view(place).toString()), "Share place"))
         }

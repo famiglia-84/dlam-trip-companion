@@ -25,6 +25,9 @@ data class MapSearchState(
     val details: PlaceDetails? = null,
     val detailsBusy: Boolean = false,
     val detailsMessage: String? = null,
+    val reviews: PlaceReviews? = null,
+    val reviewsBusy: Boolean = false,
+    val reviewsMessage: String? = null,
 )
 
 class MapViewModel(
@@ -39,6 +42,8 @@ class MapViewModel(
     val state = _state.asStateFlow()
     private var request: Job? = null
     private var detailRequest: Job? = null
+    private var reviewsRequest: Job? = null
+    private var reviewsLoadedAt = 0L
     private val thumbnailLock = Mutex()
     private val thumbnails = linkedMapOf<String, Pair<Long, PlacePhoto?>>()
     private var detailsLoadedAt = 0L
@@ -164,10 +169,43 @@ class MapViewModel(
         }
     }
 
+    /** On-demand reviews remain in memory for this selection only, including an empty result. */
+    fun loadReviews(force: Boolean = false) {
+        val id = _state.value.selected?.id ?: return
+        val provider = lookup ?: return
+        if (_state.value.reviewsBusy || (!force && _state.value.reviews != null &&
+                android.os.SystemClock.elapsedRealtime() - reviewsLoadedAt < 60_000L)) return
+        _state.value = _state.value.copy(reviewsBusy = true, reviewsMessage = null)
+        reviewsRequest = viewModelScope.launch {
+            try {
+                val result = provider.reviews(id)
+                kotlin.coroutines.coroutineContext.ensureActive()
+                if (_state.value.selected?.id == id) {
+                    reviewsLoadedAt = android.os.SystemClock.elapsedRealtime()
+                    _state.value = _state.value.copy(reviews = result)
+                }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) {
+                if (_state.value.selected?.id == id) _state.value = _state.value.copy(
+                    reviewsMessage = "Reviews could not load. Check your connection and try again.")
+            } finally {
+                if (kotlin.coroutines.coroutineContext[Job]?.isActive == true && _state.value.selected?.id == id)
+                    _state.value = _state.value.copy(reviewsBusy = false)
+            }
+        }
+    }
+
+    fun cancelReviewsLoad() {
+        reviewsRequest?.cancel()
+        _state.value = _state.value.copy(reviewsBusy = false)
+    }
+
     private fun resetDetails() {
         detailRequest?.cancel()
+        cancelReviewsLoad()
+        reviewsLoadedAt = 0L
         detailsLoadedAt = 0L
-        _state.value = _state.value.copy(details = null, detailsBusy = false, detailsMessage = null)
+        _state.value = _state.value.copy(details = null, detailsBusy = false, detailsMessage = null, reviews = null, reviewsBusy = false, reviewsMessage = null)
     }
 
     private fun execute(action: suspend (PlaceLookup) -> Unit) {
