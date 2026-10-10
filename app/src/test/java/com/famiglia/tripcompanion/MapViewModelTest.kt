@@ -167,6 +167,70 @@ class MapViewModelTest {
         assertTrue(lookup.detailsCalls.isEmpty())
     }
 
+    @Test fun reviewsAreExplicitCachedAndResetForANewPlace() = runTest {
+        model.select("cafe-id"); runCurrent()
+        model.loadDetails(); runCurrent()
+        assertTrue(lookup.reviewCalls.isEmpty())
+        model.loadReviews(); runCurrent()
+        assertEquals(listOf("cafe-id"), lookup.reviewCalls)
+        assertEquals("cafe-id review", model.state.value.reviews?.reviews?.single()?.text)
+        model.loadReviews(); runCurrent()
+        assertEquals(1, lookup.reviewCalls.size)
+        model.select("museum-id"); runCurrent()
+        assertNull(model.state.value.reviews)
+        model.loadReviews(); runCurrent()
+        assertEquals(listOf("cafe-id", "museum-id"), lookup.reviewCalls)
+        model.dismissSelection()
+        assertNull(model.state.value.reviews)
+    }
+
+    @Test fun emptyReviewsAreCachedAndFailuresAllowExplicitRetryWithoutSdkDetails() = runTest {
+        model.select("cafe-id"); runCurrent()
+        lookup.reviewFailure = true
+        model.loadReviews(); runCurrent()
+        assertNotNull(model.state.value.reviewsMessage)
+        assertFalse(model.state.value.reviewsMessage.orEmpty().contains("private request"))
+        assertFalse(model.state.value.reviewsBusy)
+        lookup.reviewFailure = false
+        lookup.emptyReviews = true
+        model.loadReviews(); runCurrent()
+        assertTrue(model.state.value.reviews!!.reviews.isEmpty())
+        assertNull(model.state.value.reviewsMessage)
+        model.loadReviews(); runCurrent()
+        assertEquals(2, lookup.reviewCalls.size)
+        model.loadReviews(force = true); runCurrent()
+        assertEquals(3, lookup.reviewCalls.size)
+    }
+
+    @Test fun lateCancelledReviewsCannotReplaceANewPlaceOrItsLoadingState() = runTest {
+        model.select("old-id"); runCurrent()
+        val gate = CompletableDeferred<Unit>()
+        lookup.reviewBarrier = gate
+        model.loadReviews(); runCurrent()
+        model.select("new-id"); runCurrent()
+        lookup.reviewBarrier = null
+        model.loadReviews(); runCurrent()
+        gate.complete(Unit); runCurrent()
+        assertEquals("new-id review", model.state.value.reviews!!.reviews.single().text)
+        assertFalse(model.state.value.reviewsBusy)
+    }
+
+    @Test fun closingReviewsCancelsInflightResponseAndReopeningCanRetry() = runTest {
+        model.select("cafe-id"); runCurrent()
+        val gate = CompletableDeferred<Unit>()
+        lookup.reviewBarrier = gate
+        model.loadReviews(); runCurrent()
+        model.loadReviews(); runCurrent()
+        assertEquals(1, lookup.reviewCalls.size)
+        model.cancelReviewsLoad()
+        assertFalse(model.state.value.reviewsBusy)
+        gate.complete(Unit); runCurrent()
+        assertNull(model.state.value.reviews)
+        lookup.reviewBarrier = null
+        model.loadReviews(); runCurrent()
+        assertEquals("cafe-id review", model.state.value.reviews!!.reviews.single().text)
+    }
+
     private class FakeLookup : PlaceLookup {
         val queries = mutableListOf<String>()
         val detailsCalls = mutableListOf<Pair<String, Boolean>>()
@@ -174,6 +238,17 @@ class MapViewModelTest {
         var failedId: String? = null
         val richCalls = mutableListOf<String>()
         val photoCalls = mutableListOf<String>()
+        val reviewCalls = mutableListOf<String>()
+        var reviewBarrier: CompletableDeferred<Unit>? = null
+        var reviewFailure = false
+        var emptyReviews = false
+        override suspend fun reviews(id: String): PlaceReviews {
+            reviewCalls += id
+            val gate = reviewBarrier
+            if (gate != null) withContext(NonCancellable) { gate.await() }
+            if (reviewFailure) error("private request")
+            return PlaceReviews(if (emptyReviews) emptyList() else listOf(PlaceReview("Author", text = "$id review")))
+        }
         var richBarrier: CompletableDeferred<Unit>? = null
         var richFailure = false
         override suspend fun thumbnail(id: String): PlacePhoto? { photoCalls += id; return null }

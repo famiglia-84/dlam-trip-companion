@@ -64,6 +64,12 @@ internal fun MapLayout(
 ) {
     val state by model.state.collectAsStateWithLifecycle()
     val query by model.query.collectAsStateWithLifecycle()
+    var feature by rememberSaveable(state.selected?.id) { mutableStateOf<PlaceFeature?>(null) }
+    LaunchedEffect(feature, state.selected?.id) { if (feature == PlaceFeature.Reviews) model.loadReviews() }
+    val openedFeature = feature
+    DisposableEffect(model, openedFeature, state.selected?.id) {
+        onDispose { if (openedFeature == PlaceFeature.Reviews) model.cancelReviewsLoad() }
+    }
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
     var expandedMap by rememberSaveable(scopeId) { mutableStateOf(false) }
@@ -133,11 +139,12 @@ internal fun MapLayout(
             .coerceAtMost((rootHeight - topInset - 48.dp).coerceAtLeast(8.dp))
         // The map must be INSIDE the scaffold surface. A transparent full-screen surface
         // placed above a sibling Android View still intercepts its touch hit testing.
-        Box(Modifier.fillMaxSize().testTag("map-sheet-viewport").padding(horizontal = 12.dp)) {
+        Box(Modifier.fillMaxSize().testTag("map-sheet-viewport").padding(horizontal = 12.dp)
+            .then(if (feature != null) Modifier.clearAndSetSemantics { } else Modifier)) {
             BottomSheetScaffold(
                 scaffoldState = sheetScaffold,
                 sheetPeekHeight = if (state.selected == null) 0.dp else peek + footer, sheetDragHandle = null,
-                sheetSwipeEnabled = state.selected != null, sheetShadowElevation = 0.dp,
+                sheetSwipeEnabled = state.selected != null && feature == null, sheetShadowElevation = 0.dp,
                 containerColor = Color.Transparent, sheetContainerColor = Color.Transparent,
                 sheetContent = {
                     // The full-height wrapper keeps anchors fixed. Only its visible card
@@ -151,7 +158,7 @@ internal fun MapLayout(
                                     toggle = { scope.launch { if (sheetExpanded) sheet.partialExpand() else sheet.expand() } },
                                     save = { dismissKeyboard(); save(selected.id, selected.name.ifBlank { "Saved place" }, selected.address) },
                                     unsave = unsave,
-                                    appearance = appearance, compactHeight = { compactHeight = it })
+                                    appearance = appearance, compactHeight = { compactHeight = it }, openFeature = { feature = it })
                             } ?: Spacer(Modifier.height(1.dp)) }
                         }
                     }
@@ -212,6 +219,14 @@ internal fun MapLayout(
                         }
                     }
                 }
+            }
+        }
+        val selected = state.selected
+        val activeFeature = feature
+        if (selected != null && activeFeature != null) {
+            PlaceFeatureCard(activeFeature, selected, rootHeight, footer, dismiss = { feature = null }) {
+                if (activeFeature == PlaceFeature.Reviews) PlaceReviewsCard(selected, state, model)
+                else PlaceStreetView(selected)
             }
         }
     }
@@ -292,8 +307,8 @@ private fun MapInformation(dismiss: () -> Unit) {
             Column(Modifier.heightIn(max = 300.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("Search or tap a named place on the map, then choose Save place. Review or edit its name and address before confirming. Zoom in to reveal more places. Blank map areas are not selectable.")
                 Text("Google receives map requests, your search text and selected place IDs. Booking codes and private notes stay here.")
-                Text("Drag the place card up, or use its expand button, for photos, ratings, hours and actions. Directions opens Google Maps. Tap a saved place's thumbnail to find it on this map.")
-                Text("Google photos and expanded details load online and may incur Google Maps Platform charges. You can choose your own photo in the save dialog; it stays with your selected photo provider and is not uploaded to Google Maps.")
+                Text("Drag the place card up, or use its expand button, for photos, ratings, hours and actions. Tap the rating row to read a selection of Google reviews. Street View opens an interactive panorama when imagery is available; drag only its top handle to move the card. Directions opens Google Maps. Tap a saved place's thumbnail to find it on this map.")
+                Text("Google photos, expanded details, reviews and Street View load online and may incur Google Maps Platform charges. Reviews and panoramas load only when you open them. You can choose your own photo in the save dialog; it stays with your selected photo provider and is not uploaded to Google Maps.")
                 Text("Maps and Google place details need a connection. Your saved travel records remain available offline.")
                 TextButton(onClick = { uriHandler.openUri("https://policies.google.com/privacy") }) { Text("Google privacy") }
                 TextButton(onClick = { uriHandler.openUri("https://maps.google.com/help/terms_maps/") }) { Text("Maps terms") }
