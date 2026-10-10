@@ -289,10 +289,17 @@ private fun MapControls(query: String, changeQuery: (String) -> Unit, enabled: B
                 horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 NearbyCategory.entries.forEach { option ->
                     FilterChip(selected = category == option, onClick = { discover(option) }, enabled = enabled,
+                        shape = RoundedCornerShape(24.dp), colors = FilterChipDefaults.filterChipColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.95f),
+                            disabledContainerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.95f),
+                            selectedContainerColor = MaterialTheme.colorScheme.primary,
+                            selectedLabelColor = MaterialTheme.colorScheme.onPrimary),
                         label = { Text(option.label) }, modifier = Modifier.heightIn(min = 48.dp).testTag("nearby-${option.name}"))
                 }
-                if (category != null) TextButton(onClick = clearNearby, enabled = enabled,
-                    modifier = Modifier.heightIn(min = 48.dp).testTag("nearby-clear")) { Text("Clear") }
+                if (category != null) GlassSurface(shape = RoundedCornerShape(24.dp)) {
+                    TextButton(onClick = clearNearby, enabled = enabled,
+                        modifier = Modifier.heightIn(min = 48.dp).testTag("nearby-clear")) { Text("Clear") }
+                }
             }
         }
     }
