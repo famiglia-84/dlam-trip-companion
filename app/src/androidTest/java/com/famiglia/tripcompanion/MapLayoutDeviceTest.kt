@@ -1,6 +1,10 @@
 package com.famiglia.tripcompanion
 
 import android.os.SystemClock
+import android.view.Gravity
+import android.view.MotionEvent
+import android.widget.Button
+import android.widget.FrameLayout
 
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
@@ -16,6 +20,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.SavedStateHandle
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -45,6 +50,10 @@ class MapLayoutDeviceTest {
     @Volatile private var keyboardVisible = false
     private var previousKeyboardSetting = ""
     private var themeChanges = 0
+    private var mapDrags = 0
+    private var pinTaps = 0
+    private var zoomInTaps = 0
+    private var zoomOutTaps = 0
 
     @OptIn(ExperimentalMaterial3Api::class)
     @Before fun setUp() {
@@ -67,7 +76,33 @@ class MapLayoutDeviceTest {
                             IconButton(onClick = { themeChanges++ }) { Icon(Icons.Default.Contrast, "Change test theme") }
                         }) { modifier, safePadding ->
                             Surface(modifier, color = MaterialTheme.colorScheme.secondaryContainer) {
-                                Box(Modifier.fillMaxSize().padding(safePadding).testTag("map-safe-content")) { Text("Controlled map renderer") }
+                                Box(Modifier.fillMaxSize().padding(safePadding).testTag("map-safe-content")) {
+                                    // Maps embeds an Android View. Semantics-only clicks on Compose
+                                    // controls cannot detect an overlay blocking native map input.
+                                    AndroidView(modifier = Modifier.fillMaxSize(), factory = { context ->
+                                        FrameLayout(context).apply {
+                                            var startX = 0f
+                                            var dragged = false
+                                            setOnTouchListener { _, event ->
+                                                when (event.actionMasked) {
+                                                    MotionEvent.ACTION_DOWN -> { startX = event.x; dragged = false }
+                                                    MotionEvent.ACTION_MOVE -> if (kotlin.math.abs(event.x - startX) > 32f) dragged = true
+                                                    MotionEvent.ACTION_UP -> if (dragged) mapDrags++
+                                                }
+                                                true
+                                            }
+                                            fun control(label: String, gravity: Int, clicked: () -> Unit) {
+                                                addView(Button(context).apply {
+                                                    text = label
+                                                    setOnClickListener { clicked() }
+                                                }, FrameLayout.LayoutParams(64, 48, gravity))
+                                            }
+                                            control("Pin", Gravity.CENTER) { pinTaps++; model.select("luz-id") }
+                                            control("+", Gravity.BOTTOM or Gravity.RIGHT) { zoomInTaps++ }
+                                            control("−", Gravity.BOTTOM or Gravity.LEFT) { zoomOutTaps++ }
+                                        }
+                                    })
+                                }
                             }
                         }
                     }
@@ -116,6 +151,40 @@ class MapLayoutDeviceTest {
             }
             SystemClock.uptimeMillis() - stableSince >= 500
         }
+    }
+
+    private fun touchMapControls() {
+        compose.onNodeWithTag("map-safe-content").performTouchInput {
+            swipe(Offset(48f, height * 0.25f), Offset(width - 48f, height * 0.25f), durationMillis = 400)
+            click(Offset(width - 32f, height - 24f))
+            click(Offset(32f, height - 24f))
+        }
+        compose.runOnIdle {
+            assertTrue("A real drag must reach the embedded map view", mapDrags > 0)
+            assertTrue("A real zoom-in tap must reach the embedded map view", zoomInTaps > 0)
+            assertTrue("A real zoom-out tap must reach the embedded map view", zoomOutTaps > 0)
+        }
+    }
+
+    @Test fun nativeMapReceivesDragsPinAndZoomTapsWithAndWithoutPlaceSheet() {
+        touchMapControls()
+        compose.onNodeWithTag("map-safe-content").performTouchInput { click(center) }
+        compose.runOnIdle { assertEquals("Native pin tap must select a place", 1, pinTaps) }
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("map-save").fetchSemanticsNodes().isNotEmpty() }
+        // Let the selected sheet and its SDK padding settle before tapping again.
+        compose.waitForIdle()
+        compose.runOnIdle { mapDrags = 0; zoomInTaps = 0; zoomOutTaps = 0 }
+        touchMapControls()
+        compose.onNodeWithContentDescription("Expand place details").performClick()
+        compose.onNodeWithContentDescription("Collapse place details").performClick()
+        compose.waitForIdle()
+        compose.runOnIdle { mapDrags = 0; zoomInTaps = 0; zoomOutTaps = 0 }
+        touchMapControls()
+        compose.onNodeWithContentDescription("Close place").performClick()
+        compose.waitForIdle()
+        compose.runOnIdle { mapDrags = 0; zoomInTaps = 0; zoomOutTaps = 0 }
+        touchMapControls()
+        assertTrue("Map taps must not save records", saved.isEmpty())
     }
 
     @Test fun searchResultsOverlayTheMapAndSelectionKeepsSaveVisibleWithUniformPadding() {
