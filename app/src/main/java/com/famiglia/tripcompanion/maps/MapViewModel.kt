@@ -57,10 +57,13 @@ class MapViewModel(
     private var hasScope = false
     private var activeScope: Long? = null
     private var cameraSequence = 0L
+    private var viewportMovementSequence = 0L
 
-    fun updateViewport(area: MapArea) {
+    fun updateViewport(area: MapArea, userMoved: Boolean = true) {
+        if (userMoved) viewportMovementSequence++
         val searched = _state.value.searchedArea
-        _state.value = _state.value.copy(viewport = area, areaChanged = searched != null && area.differsFrom(searched))
+        _state.value = _state.value.copy(viewport = area,
+            areaChanged = if (userMoved) searched != null && area.differsFrom(searched) else _state.value.areaChanged)
     }
 
     fun discover(category: NearbyCategory) {
@@ -71,6 +74,7 @@ class MapViewModel(
                 else "Zoom in to search a smaller area (up to 50 km from its centre).")
             return
         }
+        val movementAtSearch = viewportMovementSequence
         resetDetails()
         _state.value = _state.value.copy(selected = null, suggestions = emptyList(), nearbyCategory = category,
             nearbyPins = emptyList(), nearbyMessage = null, cameraRequest = null)
@@ -78,7 +82,7 @@ class MapViewModel(
             val locations = provider.nearby(category, area).distinctBy { it.id }.take(20)
             kotlin.coroutines.coroutineContext.ensureActive()
             _state.value = _state.value.copy(nearbyPins = locations, searchedArea = area,
-                areaChanged = _state.value.viewport?.differsFrom(area) == true,
+                areaChanged = viewportMovementSequence != movementAtSearch && _state.value.viewport?.differsFrom(area) == true,
                 nearbyMessage = if (locations.isEmpty()) "No ${category.label.lowercase()} found here. Try another area or category."
                     else "${locations.size} nearby results · tap a pin for details")
         }

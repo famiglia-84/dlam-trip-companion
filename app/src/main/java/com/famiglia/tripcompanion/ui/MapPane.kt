@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.IntSize
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.famiglia.tripcompanion.data.Place
 import com.famiglia.tripcompanion.maps.MapViewModel
@@ -39,6 +41,7 @@ fun MapPane(model: MapViewModel, places: List<Place>, scopeId: Long?, save: (Str
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
     var mapLoaded by remember { mutableStateOf(false) }
+    var mapSize by remember { mutableStateOf(IntSize.Zero) }
     var mapSlow by remember { mutableStateOf(false) }
     LaunchedEffect(mapLoaded, model.configured) {
         if (model.configured && !mapLoaded) { delay(15_000); mapSlow = true } else mapSlow = false
@@ -56,13 +59,18 @@ fun MapPane(model: MapViewModel, places: List<Place>, scopeId: Long?, save: (Str
             } finally { model.cameraHandled(command.sequence) }
         }
     }
-    LaunchedEffect(mapLoaded, camera) {
-        if (mapLoaded) snapshotFlow { camera.isMoving to camera.position }.collect { (moving, position) ->
+    LaunchedEffect(mapLoaded, camera, mapSize) {
+        var userMoved = false
+        // A fold/resize changes the visible region even when the camera target is unchanged.
+        if (mapLoaded) withFrameNanos { }
+        if (mapLoaded) snapshotFlow { Triple(camera.isMoving, camera.position, camera.cameraMoveStartedReason) }.collect { (moving, position, reason) ->
+            if (moving) userMoved = reason == CameraMoveStartedReason.GESTURE || reason == CameraMoveStartedReason.API_ANIMATION
             if (!moving) camera.projection?.visibleRegion?.let { visible ->
                 val centre = position.target
                 val radius = listOf(visible.nearLeft, visible.nearRight, visible.farLeft, visible.farRight)
                     .maxOf { MapArea.distanceMeters(centre.latitude, centre.longitude, it.latitude, it.longitude) }
-                model.updateViewport(MapArea(centre.latitude, centre.longitude, maxOf(1.0, radius)))
+                model.updateViewport(MapArea(centre.latitude, centre.longitude, maxOf(1.0, radius)), userMoved = userMoved)
+                userMoved = false
             }
         }
     }
@@ -72,7 +80,7 @@ fun MapPane(model: MapViewModel, places: List<Place>, scopeId: Long?, save: (Str
     }
     MapLayout(model, places, scopeId, save, modifier, mapSlow, appearance, bottomOverlay, unsave) { mapModifier, padding ->
         GoogleMap(
-            modifier = mapModifier.testTag("google-map"), cameraPositionState = camera,
+            modifier = mapModifier.testTag("google-map").onSizeChanged { mapSize = it }, cameraPositionState = camera,
             contentPadding = padding,
             properties = MapProperties(isMyLocationEnabled = false),
             uiSettings = MapUiSettings(myLocationButtonEnabled = false, mapToolbarEnabled = false),

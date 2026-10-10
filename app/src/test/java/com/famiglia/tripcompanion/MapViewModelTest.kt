@@ -337,6 +337,26 @@ class MapViewModelTest {
         assertEquals(1, lookup.nearbyCalls.size)
     }
 
+    @Test fun layoutAndAutomaticFocusChangesDoNotOfferAnUnrequestedAreaRefresh() = runTest {
+        model.updateViewport(MapArea(41.1, 16.9, 1000.0))
+        model.discover(NearbyCategory.Cafes); runCurrent()
+        val changed = MapArea(41.2, 16.9, 1500.0)
+        model.updateViewport(changed, userMoved = false)
+        assertEquals(changed, model.state.value.viewport)
+        assertFalse(model.state.value.areaChanged)
+        assertEquals(1, lookup.nearbyCalls.size)
+        model.updateViewport(changed, userMoved = true)
+        assertTrue(model.state.value.areaChanged)
+        model.updateViewport(changed.copy(radiusMeters = 2000.0), userMoved = false)
+        assertTrue(model.state.value.areaChanged) // Padding changes must not erase an already pending refresh.
+        val gate = CompletableDeferred<Unit>()
+        lookup.nearbyBarrier = gate
+        model.searchThisArea(); runCurrent()
+        model.updateViewport(changed.copy(radiusMeters = 3000.0), userMoved = false)
+        gate.complete(Unit); runCurrent()
+        assertFalse(model.state.value.areaChanged) // Loading/result overlays do not count as a pan during the request.
+    }
+
     private class FakeLookup : PlaceLookup {
         val nearbyCalls = mutableListOf<Pair<NearbyCategory, MapArea>>()
         var nearbyBarrier: CompletableDeferred<Unit>? = null
