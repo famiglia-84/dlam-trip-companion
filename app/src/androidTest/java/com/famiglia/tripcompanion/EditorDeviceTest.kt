@@ -60,10 +60,16 @@ class EditorDeviceTest {
         compose.onNodeWithText("Destination").performTextInput("Bari")
         compose.onNodeWithText("Save").performClick()
         compose.waitUntil(15_000) { compose.onAllNodesWithText("Bari").fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithText("Add reservation").assertIsDisplayed()
+        // A floating dock reduces the list viewport; reaching the action can require scrolling.
+        compose.waitUntil(15_000) { compose.onAllNodesWithText("Cancel").fetchSemanticsNodes().isEmpty() &&
+            compose.onAllNodesWithText("Add reservation").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("Add reservation").performScrollTo().assertIsDisplayed()
         compose.activityRule.scenario.recreate()
         compose.waitUntil(15_000) { compose.onAllNodesWithText("Bari").fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithText("Add reservation").assertIsDisplayed()
+        // A floating dock reduces the list viewport; reaching the action can require scrolling.
+        compose.waitUntil(15_000) { compose.onAllNodesWithText("Cancel").fetchSemanticsNodes().isEmpty() &&
+            compose.onAllNodesWithText("Add reservation").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("Add reservation").performScrollTo().assertIsDisplayed()
     }
 
     @Test fun editorDraftSurvivesActivityRecreation() {
