@@ -1,5 +1,7 @@
 # Google Maps and place search
 
+Version 0.6.5 insets the floating bottom navigation by 20 dp on each side, matching the Saved places toolbar and search bar on the main Map screen. The map and card keep their wider frame, with their surfaces visible around the dock. Navigation height and card content clearance continue to adapt to the available width and text size.
+
 Version 0.6.4 removes the solid green footer behind the floating navigation on the main Map screen. The map is visible in the dock's surrounding gaps when no place is selected. With a selection, the card's surface extends to the bottom behind the dock, while its information and scrollable body retain their previous clearance above navigation. SDK content padding still keeps the map's Google logo and zoom controls in the uncovered area. The renderer and fixed sheet anchors are retained, including swipe dismissal and Back behavior.
 
 Expanded Save is the first tile in the Directions/Share/Call/Website action row, with the same proportions and a mint accent. The row scrolls horizontally on narrow screens and belongs to the scrollable details body; it is no longer pinned to the toolbar. A disabled Saved tile represents an already-linked place. Compact cards keep their existing Save action. The selected name and address still prefill the save dialog.

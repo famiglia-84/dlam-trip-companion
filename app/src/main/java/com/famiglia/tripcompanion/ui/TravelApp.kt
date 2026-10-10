@@ -117,7 +117,7 @@ fun TravelApp(model: TravelViewModel) {
                 bottomBar = {
                     if (!expanded) Box(Modifier.fillMaxWidth()
                         .testTag("floating-navigation-container")
-                        .navigationBarsPadding().padding(horizontal = 12.dp, vertical = 8.dp)) {
+                        .navigationBarsPadding().padding(horizontal = 20.dp, vertical = 8.dp)) {
                         GlassSurface(Modifier.fillMaxWidth().testTag("glass-navigation"), kind = GlassKind.Dock, shape = RoundedCornerShape(28.dp)) {
                             Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(6.dp),
                                 horizontalArrangement = Arrangement.spacedBy(4.dp)) {

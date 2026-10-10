@@ -15,8 +15,8 @@ android {
         applicationId = "com.famiglia.tripcompanion"
         minSdk = 26
         targetSdk = 36
-        versionCode = 14
-        versionName = "0.6.4"
+        versionCode = 15
+        versionName = "0.6.5"
         val localSettings = Properties().apply {
             rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
         }
