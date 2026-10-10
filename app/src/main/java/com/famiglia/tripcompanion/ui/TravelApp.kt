@@ -94,17 +94,19 @@ fun TravelApp(model: TravelViewModel) {
             val expanded = maxWidth >= 840.dp
             Scaffold(
                 topBar = {
-                    TopAppBar(
-                        title = { Column {
-                            Text(if (route == "places") "Saved places" else "Trip Companion", fontWeight = FontWeight.SemiBold)
-                            if (route != "maps" && route != "places" && !(route == "trips" && selected != null && section == "Map"))
-                                Text("A little less planning. A little more adventure.", style = MaterialTheme.typography.labelSmall)
-                        } },
-                        actions = {
-                            if (route == "places") IconButton(onClick = { edit("place") }) { Icon(Icons.Default.Add, "Save a place") }
-                            IconButton(onClick = model::cycleTheme) { Icon(Icons.Default.Contrast, "Theme: $theme. Change appearance") }
-                        },
-                    )
+                    if (route != "maps" || !maps.configured) {
+                        TopAppBar(
+                            title = { Column {
+                                Text(if (route == "places") "Saved places" else "Trip Companion", fontWeight = FontWeight.SemiBold)
+                                if (route != "maps" && route != "places" && !(route == "trips" && selected != null && section == "Map"))
+                                    Text("A little less planning. A little more adventure.", style = MaterialTheme.typography.labelSmall)
+                            } },
+                            actions = {
+                                if (route == "places") IconButton(onClick = { edit("place") }) { Icon(Icons.Default.Add, "Save a place") }
+                                IconButton(onClick = model::cycleTheme) { Icon(Icons.Default.Contrast, "Theme: $theme. Change appearance") }
+                            },
+                        )
+                    }
                 },
                 bottomBar = {
                     if (!expanded) NavigationBar {
@@ -149,7 +151,12 @@ fun TravelApp(model: TravelViewModel) {
                         composable("places") {
                             SavedPlacesPane(data.places, data.trips, maps, ::openSavedPlace, { edit("place", it.id) }, { remove("place", it.id) })
                         }
-                        composable("maps") { MapPane(maps, data.places, null, ::saveMapPlace, requestedPlaceId = requestedMapPlace, consumedRequest = { requestedMapPlace = null }) }
+                        composable("maps") {
+                            MapPane(maps, data.places, null, ::saveMapPlace, requestedPlaceId = requestedMapPlace,
+                                consumedRequest = { requestedMapPlace = null }, appearance = {
+                                    IconButton(onClick = model::cycleTheme) { Icon(Icons.Default.Contrast, "Theme: $theme. Change appearance") }
+                                })
+                        }
                     }
                 }
             }

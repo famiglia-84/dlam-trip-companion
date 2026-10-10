@@ -20,7 +20,7 @@ internal val LocalMapRenderer = staticCompositionLocalOf<(@Composable (Modifier,
 
 @Composable
 fun MapPane(model: MapViewModel, places: List<Place>, scopeId: Long?, save: (String, String, String) -> Unit, modifier: Modifier = Modifier,
-    requestedPlaceId: String? = null, consumedRequest: () -> Unit = {}) {
+    requestedPlaceId: String? = null, consumedRequest: () -> Unit = {}, appearance: (@Composable () -> Unit)? = null) {
     val state by model.state.collectAsStateWithLifecycle()
     val renderer = LocalMapRenderer.current
     LaunchedEffect(scopeId, requestedPlaceId) {
@@ -28,7 +28,7 @@ fun MapPane(model: MapViewModel, places: List<Place>, scopeId: Long?, save: (Str
         requestedPlaceId?.let { model.select(it); consumedRequest() }
     }
     if (renderer != null) {
-        MapLayout(model, places, scopeId, save, modifier, map = renderer)
+        MapLayout(model, places, scopeId, save, modifier, appearance = appearance, map = renderer)
         return
     }
     val camera = rememberCameraPositionState()
@@ -54,7 +54,7 @@ fun MapPane(model: MapViewModel, places: List<Place>, scopeId: Long?, save: (Str
         keyboard?.hide(); focus.clearFocus()
         model.select(id)
     }
-    MapLayout(model, places, scopeId, save, modifier, mapSlow) { mapModifier, padding ->
+    MapLayout(model, places, scopeId, save, modifier, mapSlow, appearance) { mapModifier, padding ->
         GoogleMap(
             modifier = mapModifier.testTag("google-map"), cameraPositionState = camera,
             contentPadding = padding,

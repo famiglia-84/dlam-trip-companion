@@ -35,9 +35,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import androidx.compose.ui.viewinterop.AndroidView
@@ -52,7 +52,8 @@ import com.famiglia.tripcompanion.maps.MapViewModel
 @OptIn(ExperimentalMaterial3Api::class)
 internal fun MapLayout(
     model: MapViewModel, places: List<Place>, scopeId: Long?, save: (String, String, String) -> Unit,
-    modifier: Modifier = Modifier, mapSlow: Boolean = false, map: @Composable (Modifier, PaddingValues) -> Unit,
+    modifier: Modifier = Modifier, mapSlow: Boolean = false, appearance: (@Composable () -> Unit)? = null,
+    map: @Composable (Modifier, PaddingValues) -> Unit,
 ) {
     val state by model.state.collectAsStateWithLifecycle()
     val query by model.query.collectAsStateWithLifecycle()
@@ -60,7 +61,6 @@ internal fun MapLayout(
     val keyboard = LocalSoftwareKeyboardController.current
     var expandedMap by rememberSaveable(scopeId) { mutableStateOf(false) }
     var showInfo by rememberSaveable(scopeId) { mutableStateOf(false) }
-    var showOptions by remember { mutableStateOf(false) }
     BackHandler(enabled = expandedMap) { expandedMap = false }
     fun dismissKeyboard() { keyboard?.hide(); focus.clearFocus() }
     fun search() { if (!state.busy) { dismissKeyboard(); model.search() } }
@@ -80,11 +80,8 @@ internal fun MapLayout(
     val sheetScaffold = rememberBottomSheetScaffoldState(bottomSheetState = sheet)
     val scope = rememberCoroutineScope()
     val sheetExpanded = sheet.currentValue == SheetValue.Expanded || sheet.targetValue == SheetValue.Expanded
-    // currentValue can change while dragging; resize only once an anchor is physically reached.
-    var detailsExpanded by remember(sheet) { mutableStateOf(false) }
     LaunchedEffect(state.selected?.id) {
         if (state.selected == null) {
-            detailsExpanded = false
             if (sheet.currentValue != SheetValue.PartiallyExpanded || sheet.targetValue != SheetValue.PartiallyExpanded)
                 sheet.partialExpand()
         }
@@ -95,66 +92,19 @@ internal fun MapLayout(
     BoxWithConstraints(modifier.fillMaxSize().imePadding().testTag("map-layout")) {
         val shortWindow = maxHeight < 420.dp
         Column(Modifier.fillMaxSize()) {
-            if (!expandedMap && !detailsExpanded) {
-                Column(Modifier.fillMaxWidth().testTag("map-controls").padding(horizontal = 12.dp, vertical = 8.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        MapSearchField(query, model::changeQuery, !state.busy, ::search, Modifier.weight(1f))
-                        if (shortWindow) Box {
-                            IconButton(onClick = { showOptions = true }) { Icon(Icons.Default.MoreVert, "Map options") }
-                            DropdownMenu(expanded = showOptions, onDismissRequest = { showOptions = false }) {
-                                DropdownMenuItem(text = { Text("Show saved places") }, enabled = !state.busy,
-                                    onClick = { showOptions = false; savedPlaces() })
-                                DropdownMenuItem(text = { Text("Map information") }, onClick = { showOptions = false; showInfo = true })
-                                DropdownMenuItem(text = { Text("Expand map") }, onClick = { showOptions = false; expand() })
-                            }
-                        }
-                    }
-                    if (!shortWindow) BoxWithConstraints(Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-                        val separateActions = maxWidth >= 360.dp && LocalDensity.current.fontScale <= 1.3f
-                        val actionSpace = if (separateActions) 96.dp else 48.dp
-                        TextButton(onClick = ::savedPlaces, enabled = !state.busy,
-                            modifier = Modifier.align(Alignment.Center).widthIn(max = (maxWidth - actionSpace * 2).coerceAtLeast(0.dp)).heightIn(min = 48.dp).testTag("map-saved-places")) {
-                            Icon(Icons.Default.BookmarkBorder, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp))
-                            Text("Saved places", textAlign = TextAlign.Center)
-                        }
-                        Row(Modifier.align(Alignment.CenterEnd), verticalAlignment = Alignment.CenterVertically) {
-                            if (separateActions) {
-                                IconButton(onClick = { dismissKeyboard(); showInfo = true }) { Icon(Icons.Default.Info, "Map information") }
-                                IconButton(onClick = ::expand) { Icon(Icons.Default.Fullscreen, "Expand map") }
-                            } else Box {
-                                IconButton(onClick = { showOptions = true }) { Icon(Icons.Default.MoreVert, "Map options") }
-                                DropdownMenu(expanded = showOptions, onDismissRequest = { showOptions = false }) {
-                                    DropdownMenuItem(text = { Text("Map information") }, onClick = { showOptions = false; showInfo = true })
-                                    DropdownMenuItem(text = { Text("Expand map") }, onClick = { showOptions = false; expand() })
-                                }
-                            }
-                        }
-                    }
-                }
-            }
             val message = state.message ?: if (mapSlow) "The map has not loaded. Check your connection and Maps configuration, then reopen this screen." else null
-            if (message != null && !detailsExpanded) Text(message, Modifier.padding(horizontal = 12.dp, vertical = 4.dp).testTag("map-message"), style = MaterialTheme.typography.bodySmall)
-            if (state.busy && !detailsExpanded) LinearProgressIndicator(Modifier.fillMaxWidth())
-
-            BoxWithConstraints(Modifier.fillMaxWidth().weight(1f).testTag("map-viewport")) {
-                val resultsHeight = minOf(220.dp, maxHeight * 0.6f)
-                val compact = shortWindow || maxHeight < 400.dp
+            // The sheet overlays the controls; its anchors do not move when it reaches the top.
+            BoxWithConstraints(Modifier.fillMaxWidth().weight(1f).testTag("map-sheet-viewport")) {
+                val compact = shortWindow
                 val peek = if (state.selected == null) 0.dp else minOf(maxHeight,
                     if (compact) {
-                        if (LocalDensity.current.fontScale > 1.3f) 184.dp else 148.dp
-                    } else if (LocalDensity.current.fontScale > 1.3f) 220.dp else 188.dp)
+                        if (LocalDensity.current.fontScale > 1.3f) 244.dp else 200.dp
+                    } else if (LocalDensity.current.fontScale > 1.3f) 292.dp else 224.dp)
                 val sheetHeight = maxHeight
                 val density = LocalDensity.current
                 val offset = runCatching { sheet.requireOffset() }.getOrNull()?.takeIf { it.isFinite() }
-                val reachedTop = state.selected != null && sheet.currentValue == SheetValue.Expanded &&
+                val detailsExpanded = state.selected != null && sheet.currentValue == SheetValue.Expanded &&
                     sheet.targetValue == SheetValue.Expanded && offset != null && offset <= 1f
-                val reachedPeek = sheet.currentValue == SheetValue.PartiallyExpanded &&
-                    sheet.targetValue == SheetValue.PartiallyExpanded && offset != null &&
-                    kotlin.math.abs(offset - with(density) { (maxHeight - peek).toPx() }) <= 1f
-                LaunchedEffect(reachedTop, reachedPeek) {
-                    if (reachedTop) detailsExpanded = true
-                    else if (reachedPeek) detailsExpanded = false
-                }
                 val safeBottom = if (state.selected == null) 0.dp else with(density) {
                     (maxHeight.toPx() - (offset ?: (maxHeight - peek).toPx())).coerceIn(0f, maxHeight.toPx()).toDp()
                 }
@@ -165,55 +115,103 @@ internal fun MapLayout(
                     sheetContent = {
                         key(state.selected?.id) { state.selected?.let { selected ->
                             MapPlaceSheet(selected, places.firstOrNull { it.googlePlaceId == selected.id }, model, state,
-                                peek, sheetHeight, compact, sheetExpanded,
+                                sheetHeight, compact, sheetExpanded,
                                 toggle = { scope.launch { if (sheetExpanded) sheet.partialExpand() else sheet.expand() } },
-                                save = { dismissKeyboard(); save(selected.id, selected.name.ifBlank { "Saved place" }, selected.address) })
+                                save = { dismissKeyboard(); save(selected.id, selected.name.ifBlank { "Saved place" }, selected.address) },
+                                appearance = appearance)
                         } ?: Spacer(Modifier.height(1.dp)) }
                     },
                 ) {
-                    Surface(Modifier.fillMaxSize().padding(horizontal = 12.dp).testTag("map-frame"),
-                        shape = RoundedCornerShape(20.dp), border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.6f))) {
-                        // Keep SDK controls inset from the rounded edge; the opaque expanded sheet covers the map.
-                        val bottom = if (detailsExpanded && sheet.currentValue == SheetValue.Expanded) 8.dp
-                            else minOf(safeBottom + 8.dp, (maxHeight - 96.dp).coerceAtLeast(8.dp))
-                        map(Modifier.fillMaxSize().clip(RoundedCornerShape(20.dp)), PaddingValues(start = 8.dp, top = 8.dp, end = 8.dp, bottom = bottom))
-                    }
-                }
-                if (expandedMap && !detailsExpanded) Surface(
-                    modifier = Modifier.align(Alignment.TopEnd).padding(12.dp), shape = RoundedCornerShape(28.dp),
-                    color = MaterialTheme.colorScheme.surface,
-                ) {
-                    Row {
-                        IconButton(onClick = { expandedMap = false }) { Icon(Icons.Default.Search, "Show search controls") }
-                        IconButton(onClick = { expandedMap = false }) { Icon(Icons.Default.FullscreenExit, "Exit expanded map") }
-                    }
-                }
-                if (state.suggestions.isNotEmpty()) Surface(
-                    modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(12.dp).testTag("map-results"),
-                    shape = RoundedCornerShape(16.dp), shadowElevation = 6.dp,
-                ) {
-                    Column {
-                        LazyColumn(Modifier.heightIn(max = resultsHeight)) {
-                            items(state.suggestions, key = { it.id }) { suggestion ->
-                                TextButton(onClick = { dismissKeyboard(); model.select(suggestion.id, fromSearch = true) }, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) {
-                                    Column(Modifier.fillMaxWidth()) {
-                                        Text(suggestion.title, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                        Text(suggestion.subtitle, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    // Hide covered controls from accessibility without removing their layout space.
+                    Box(Modifier.fillMaxSize().then(if (detailsExpanded) Modifier.clearAndSetSemantics { } else Modifier)) {
+                        Column(Modifier.fillMaxSize()) {
+                            if (!expandedMap) MapControls(query, model::changeQuery, !state.busy, shortWindow,
+                                ::search, ::savedPlaces, { dismissKeyboard(); showInfo = true }, ::expand, appearance)
+                            if (message != null) Text(message, Modifier.padding(horizontal = 12.dp, vertical = 4.dp).testTag("map-message"), style = MaterialTheme.typography.bodySmall)
+                            if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+                            PlaceAttributions((state.pins + listOfNotNull(state.selected)).flatMap(MapLocation::attributions).distinct())
+                            BoxWithConstraints(Modifier.fillMaxWidth().weight(1f).testTag("map-viewport")) {
+                                val resultsHeight = minOf(220.dp, maxHeight * 0.6f)
+                                Surface(Modifier.fillMaxSize().padding(horizontal = 12.dp).testTag("map-frame"),
+                                    shape = RoundedCornerShape(20.dp), border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.6f))) {
+                                    // Keep SDK controls inset from the rounded edge; the opaque expanded sheet covers the map.
+                                    val bottom = if (detailsExpanded) 8.dp
+                                        else minOf(safeBottom + 8.dp, (maxHeight - 96.dp).coerceAtLeast(8.dp))
+                                    map(Modifier.fillMaxSize().clip(RoundedCornerShape(20.dp)), PaddingValues(start = 8.dp, top = 8.dp, end = 8.dp, bottom = bottom))
+                                }
+                                if (expandedMap) Surface(
+                                    modifier = Modifier.align(Alignment.TopEnd).padding(12.dp), shape = RoundedCornerShape(28.dp),
+                                    color = MaterialTheme.colorScheme.surface,
+                                ) {
+                                    Row {
+                                        IconButton(onClick = { expandedMap = false }) { Icon(Icons.Default.Search, "Show search controls") }
+                                        IconButton(onClick = { expandedMap = false }) { Icon(Icons.Default.FullscreenExit, "Exit expanded map") }
+                                        appearance?.invoke()
+                                    }
+                                }
+                                if (state.suggestions.isNotEmpty()) Surface(
+                                    modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(12.dp).testTag("map-results"),
+                                    shape = RoundedCornerShape(16.dp), shadowElevation = 6.dp,
+                                ) {
+                                    Column {
+                                        LazyColumn(Modifier.heightIn(max = resultsHeight)) {
+                                            items(state.suggestions, key = { it.id }) { suggestion ->
+                                                TextButton(onClick = { dismissKeyboard(); model.select(suggestion.id, fromSearch = true) }, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) {
+                                                    Column(Modifier.fillMaxWidth()) {
+                                                        Text(suggestion.title, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                                        Text(suggestion.subtitle, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        Surface(color = Color.White, modifier = Modifier.fillMaxWidth()) {
+                                            Image(painterResource(com.google.android.libraries.places.R.drawable.google_maps_attribution_image), "Google Maps", Modifier.padding(4.dp).height(18.dp))
+                                        }
                                     }
                                 }
                             }
-                        }
-                        Surface(color = Color.White, modifier = Modifier.fillMaxWidth()) {
-                            Image(painterResource(com.google.android.libraries.places.R.drawable.google_maps_attribution_image), "Google Maps", Modifier.padding(4.dp).height(18.dp))
                         }
                     }
                 }
             }
             Spacer(Modifier.fillMaxWidth().height(12.dp))
-            if (!detailsExpanded) PlaceAttributions((state.pins + listOfNotNull(state.selected)).flatMap(MapLocation::attributions).distinct())
         }
     }
     if (showInfo) MapInformation { showInfo = false }
+}
+
+@Composable
+private fun MapControls(query: String, changeQuery: (String) -> Unit, enabled: Boolean, shortWindow: Boolean,
+    search: () -> Unit, savedPlaces: () -> Unit, information: () -> Unit, expand: () -> Unit,
+    appearance: (@Composable () -> Unit)?) {
+    var showOptions by remember { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth().testTag("map-controls").padding(horizontal = 12.dp, vertical = 4.dp)) {
+        BoxWithConstraints(Modifier.fillMaxWidth().testTag("map-toolbar")) {
+            val separateActions = !shortWindow && maxWidth >= 360.dp && LocalDensity.current.fontScale <= 1.3f
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.weight(1f)) {
+                    TextButton(onClick = savedPlaces, enabled = enabled,
+                        modifier = Modifier.heightIn(min = 48.dp).testTag("map-saved-places")) {
+                        Icon(Icons.Default.BookmarkBorder, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp))
+                        Text("Saved places")
+                    }
+                }
+                if (separateActions) {
+                    IconButton(onClick = information) { Icon(Icons.Default.Info, "Map information") }
+                    IconButton(onClick = expand) { Icon(Icons.Default.Fullscreen, "Expand map") }
+                } else Box {
+                    IconButton(onClick = { showOptions = true }) { Icon(Icons.Default.MoreVert, "Map options") }
+                    DropdownMenu(expanded = showOptions, onDismissRequest = { showOptions = false }) {
+                        DropdownMenuItem(text = { Text("Map information") }, onClick = { showOptions = false; information() })
+                        DropdownMenuItem(text = { Text("Expand map") }, onClick = { showOptions = false; expand() })
+                    }
+                }
+                appearance?.invoke()
+            }
+        }
+        Spacer(Modifier.height(4.dp))
+        MapSearchField(query, changeQuery, enabled, search, Modifier.fillMaxWidth())
+    }
 }
 
 /** A 48 dp search field that grows for larger text instead of clipping it. */
