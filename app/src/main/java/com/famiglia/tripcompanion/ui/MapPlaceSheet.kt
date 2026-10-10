@@ -76,7 +76,8 @@ internal fun MapPlaceSheet(selected: MapLocation, saved: Place?, model: MapViewM
                                 .testTag("map-place-thumbnail"), selected.category)
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             PlaceHeading(selected, expanded, compact)
-                            saved?.let { Text(savedLabel(it, selected), style = MaterialTheme.typography.bodyLarge) }
+                            saved?.let { Text(savedLabel(it, selected), style = MaterialTheme.typography.bodyLarge,
+                                maxLines = if (expanded) Int.MAX_VALUE else 1, overflow = TextOverflow.Ellipsis) }
                         }
                     }
                     if (localPhoto.isBlank()) PhotoCredits(thumbnail, horizontal = true)
