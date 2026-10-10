@@ -1,5 +1,7 @@
 # Google Maps and place search
 
+Version 0.6.1 fixes blocked map gestures in the floating layout. The map is now a child of the sheet scaffold rather than behind its transparent full-screen surface, so native map views receive pan, pin and zoom touches. The sheet retains fixed anchors, dock clearance and SDK content insets. A device regression test sends physical drags and taps to an embedded Android view before selection, with a collapsed sheet, after collapsing details and after closing the place; it needs no Google requests.
+
 Version 0.6.0 applies the liquid-glass concept with mint edge highlights, tinted translucent search/toolbar surfaces, a floating navigation dock and rounded photo-led saved-place cards. The map extends behind the main Map toolbar and dock; SDK content insets keep attribution, camera focus and zoom controls in the uncovered area. Expanded details use a nearly opaque charcoal panel so names, addresses and hours remain readable. The same glass surfaces adapt to light and dark themes, and the wider layout uses a matching navigation rail.
 
 This is a lightweight Compose treatment using tint, gradients, outlines and shadows, without live backdrop blur, optical refraction, map snapshots or a new rendering dependency. Typography stays sharp. Existing sheet anchors, scrolling and touch targets are retained. Saved-place thumbnails remain tappable and a labelled **View on map** / **Find on map** action is also available. No new API requests, permissions, photo caching, database migration or AI behaviour are introduced by the styling.

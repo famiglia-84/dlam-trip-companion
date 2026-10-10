@@ -20,6 +20,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.SavedStateHandle
 import androidx.test.core.app.ApplicationProvider
@@ -47,6 +48,7 @@ class MapLayoutDeviceTest {
     private val saved = mutableListOf<Triple<String, String, String>>()
     private var places by mutableStateOf<List<Place>>(emptyList())
     private var fontScale by mutableFloatStateOf(1f)
+    private var bottomOverlay by mutableStateOf(0.dp)
     @Volatile private var keyboardVisible = false
     private var previousKeyboardSetting = ""
     private var themeChanges = 0
@@ -74,7 +76,7 @@ class MapLayoutDeviceTest {
                     ) { padding ->
                         MapLayout(model, places, null, { id, label, address -> saved += Triple(id, label, address) }, Modifier.padding(padding).consumeWindowInsets(padding), appearance = {
                             IconButton(onClick = { themeChanges++ }) { Icon(Icons.Default.Contrast, "Change test theme") }
-                        }) { modifier, safePadding ->
+                        }, bottomOverlay = bottomOverlay) { modifier, safePadding ->
                             Surface(modifier, color = MaterialTheme.colorScheme.secondaryContainer) {
                                 Box(Modifier.fillMaxSize().padding(safePadding).testTag("map-safe-content")) {
                                     // Maps embeds an Android View. Semantics-only clicks on Compose
@@ -167,6 +169,9 @@ class MapLayoutDeviceTest {
     }
 
     @Test fun nativeMapReceivesDragsPinAndZoomTapsWithAndWithoutPlaceSheet() {
+        touchMapControls()
+        compose.runOnIdle { bottomOverlay = 80.dp; mapDrags = 0; zoomInTaps = 0; zoomOutTaps = 0 }
+        // The main Map screen reserves room for its floating navigation dock.
         touchMapControls()
         compose.onNodeWithTag("map-safe-content").performTouchInput { click(center) }
         compose.runOnIdle { assertEquals("Native pin tap must select a place", 1, pinTaps) }
