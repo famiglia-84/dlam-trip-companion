@@ -224,10 +224,22 @@ class MapLayoutDeviceTest {
         compose.onNodeWithContentDescription("Change test theme").performClick()
         assertEquals(1, themeChanges)
         compose.onNodeWithText("★ 4.5 · 12 ratings").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("Monday: 09:00–17:00").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Monday: 07:00–09:00, 11:00–14:00, 16:00–18:00, 20:00–22:00").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Refresh details").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithTag("place-detail-name").assertIsNotDisplayed()
-        compose.onNodeWithTag("place-detail-address").assertIsNotDisplayed()
+        // Scroll the actual body to its end, rather than just bringing one lower action into view.
+        compose.onRoot().performTouchInput {
+            swipe(Offset(card.center.x - inputRoot.left, card.bottom - 40f - inputRoot.top),
+                Offset(card.center.x - inputRoot.left, toolbar.bottom + 24f - inputRoot.top), durationMillis = 500)
+        }
+        try {
+            compose.onNodeWithTag("place-detail-name").assertIsNotDisplayed()
+            compose.onNodeWithTag("place-detail-address").assertIsNotDisplayed()
+        } catch (failure: AssertionError) {
+            val body = compose.onNodeWithTag("map-place-details").fetchSemanticsNode()
+            throw AssertionError("Heading remains visible after body swipe: card=$card, toolbar=$toolbar, " +
+                "body=${body.boundsInRoot}, name=${compose.onNodeWithTag("place-detail-name").fetchSemanticsNode().boundsInRoot}\n" +
+                compose.onRoot(useUnmergedTree = true).printToString(), failure)
+        }
         compose.onNodeWithTag("map-save").assertIsDisplayed()
         assertEquals(toolbar.top, compose.onNodeWithTag("place-details-toolbar").fetchSemanticsNode().boundsInRoot.top, 1f)
         assertEquals(listOf("luz-id"), lookup.richCalls)
@@ -281,7 +293,9 @@ class MapLayoutDeviceTest {
         override suspend fun moreDetails(id: String): PlaceDetails {
             richCalls += id
             return PlaceDetails(photos = listOf(PlacePhoto("content://com.famiglia.tripcompanion.test/preview")), rating = 4.5, ratingCount = 12, openNow = true,
-                hours = listOf("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday").map { "$it: 09:00–17:00" })
+                // Multiple daily service windows exercise wrapped hours and guarantee real scroll overflow.
+                hours = listOf("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+                    .map { "$it: 07:00–09:00, 11:00–14:00, 16:00–18:00, 20:00–22:00" })
         }
         override suspend fun search(query: String): List<PlaceSuggestion> {
             searches += query
