@@ -52,6 +52,7 @@ class MapLayoutDeviceTest {
     @Volatile private var keyboardVisible = false
     private var previousKeyboardSetting = ""
     private var themeChanges = 0
+    private var nativeMapView: FrameLayout? = null
     private var mapDrags = 0
     private var pinTaps = 0
     private var zoomInTaps = 0
@@ -83,6 +84,7 @@ class MapLayoutDeviceTest {
                                     // controls cannot detect an overlay blocking native map input.
                                     AndroidView(modifier = Modifier.fillMaxSize(), factory = { context ->
                                         FrameLayout(context).apply {
+                                            nativeMapView = this
                                             var startX = 0f
                                             var dragged = false
                                             setOnTouchListener { _, event ->
@@ -160,6 +162,22 @@ class MapLayoutDeviceTest {
     }
 
     private fun touchMapControls() {
+        // Compose idle can precede the embedded Android View's layout after SDK
+        // padding changes. Await its real controls, rather than tapping old bounds.
+        compose.waitUntil(10_000) {
+            val safe = compose.onNodeWithTag("map-safe-content").fetchSemanticsNode().boundsInRoot
+            var ready = false
+            compose.runOnIdle {
+                nativeMapView?.let { view ->
+                    ready = view.isShown && !view.isLayoutRequested &&
+                        kotlin.math.abs(view.width - safe.width) <= 1f &&
+                        kotlin.math.abs(view.height - safe.height) <= 1f &&
+                        view.getChildAt(1).right == view.width && view.getChildAt(1).bottom == view.height &&
+                        view.getChildAt(2).left == 0 && view.getChildAt(2).bottom == view.height
+                }
+            }
+            ready
+        }
         compose.onNodeWithTag("map-safe-content").performTouchInput {
             swipe(Offset(48f, height * 0.25f), Offset(width - 48f, height * 0.25f), durationMillis = 400)
             click(Offset(width - 32f, height - 24f))

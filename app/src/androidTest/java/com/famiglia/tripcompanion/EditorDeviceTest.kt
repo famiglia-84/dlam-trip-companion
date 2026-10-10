@@ -25,7 +25,7 @@ class EditorDeviceTest {
         device.executeShellCommand("wm size 400x900")
         val database = (compose.activity.application as TripApplication).database
         runBlocking(Dispatchers.IO) { database.clearAllTables() }
-        compose.waitUntil(15_000) { compose.onAllNodesWithTag("compact-layout").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(15_000) { compose.onAllNodesWithTag("compact-layout").fetchSemanticsNodes(atLeastOneRootRequired = false).isNotEmpty() }
     }
 
     @After fun restoreDisplay() {
@@ -88,10 +88,10 @@ class EditorDeviceTest {
         compose.onNodeWithText("Bari").performClick()
         compose.onNodeWithText("Day plans").performClick()
         device.executeShellCommand("wm size 1000x900")
-        compose.waitUntil(15_000) { compose.onAllNodesWithTag("expanded-layout").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(15_000) { compose.onAllNodesWithTag("expanded-layout").fetchSemanticsNodes(atLeastOneRootRequired = false).isNotEmpty() }
         compose.onNodeWithText("Add day plan").assertIsDisplayed()
         device.executeShellCommand("wm size 400x900")
-        compose.waitUntil(15_000) { compose.onAllNodesWithTag("compact-layout").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(15_000) { compose.onAllNodesWithTag("compact-layout").fetchSemanticsNodes(atLeastOneRootRequired = false).isNotEmpty() }
         compose.onNodeWithText("Add day plan").assertIsDisplayed()
     }
 }
