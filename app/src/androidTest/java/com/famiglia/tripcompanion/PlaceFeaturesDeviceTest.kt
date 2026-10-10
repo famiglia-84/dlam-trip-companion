@@ -166,8 +166,14 @@ class PlaceFeaturesDeviceTest {
         compose.onNodeWithTag("map-street-view").performScrollTo().performClick()
         compose.onNodeWithTag("street-view-unavailable").assertIsDisplayed()
         compose.onNodeWithTag("street-view-open-maps").assertIsDisplayed()
+        device.executeShellCommand("wm size 400x500")
+        compose.onNodeWithTag("street-view-open-maps").performScrollTo().assertIsDisplayed()
+        val fallback = compose.onNodeWithTag("street-view-open-maps").fetchSemanticsNode().boundsInRoot
+        val dock = compose.onNodeWithTag("test-floating-dock").fetchSemanticsNode().boundsInRoot
+        assertTrue("Recovery action stays reachable in a short window", fallback.bottom <= dock.top)
+        device.executeShellCommand("wm size 400x900")
         compose.runOnIdle { panoramaStatus = StreetViewStatus.Available }
-        compose.onNodeWithText("Retry Street View").performClick()
+        compose.onNodeWithText("Retry Street View").performScrollTo().performClick()
         compose.onNodeWithTag("street-view-unavailable").assertDoesNotExist()
         assertEquals(2, panoramaMounts)
         assertEquals(1, panoramaDisposals)

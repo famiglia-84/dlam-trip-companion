@@ -6,6 +6,8 @@ import android.content.ComponentCallbacks2
 import android.content.res.Configuration
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material3.*
@@ -50,7 +52,7 @@ internal fun PlaceStreetView(place: MapLocation) {
                 else NativeStreetView(place, Modifier.fillMaxSize()) { status = it }
             }
             if (status != StreetViewStatus.Available) Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
-                Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
+                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
                     horizontalAlignment = Alignment.CenterHorizontally) {
                     if (status == StreetViewStatus.Loading) {
                         CircularProgressIndicator()
