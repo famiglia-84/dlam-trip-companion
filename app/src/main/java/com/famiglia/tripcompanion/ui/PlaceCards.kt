@@ -31,7 +31,10 @@ internal fun SavedPlacesPane(places: List<Place>, trips: List<Trip>, maps: MapVi
         MapSearchField(query, { query = it }, true, null, Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), "Search places")
         Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             (listOf("All") + PlaceCategory.entries.map { it.label }).forEach { label ->
-                FilterChip(selected = category == label, onClick = { category = label }, label = { Text(label) })
+                FilterChip(selected = category == label, onClick = { category = label }, label = { Text(label) },
+                    shape = RoundedCornerShape(24.dp), colors = FilterChipDefaults.filterChipColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.8f),
+                        selectedContainerColor = MaterialTheme.colorScheme.primary, selectedLabelColor = MaterialTheme.colorScheme.onPrimary))
             }
         }
         val filtered = places.filter { (category == "All" || PlaceCategory.valueOf(it.category).label == category) &&
@@ -54,10 +57,10 @@ internal fun SavedPlacesPane(places: List<Place>, trips: List<Trip>, maps: MapVi
 internal fun SavedPlaceCard(place: Place, tripLabel: String?, maps: MapViewModel, open: () -> Unit, edit: () -> Unit, remove: () -> Unit) {
     val photo = rememberPlaceThumbnail(place.googlePlaceId, place.photoUri, maps)
     var menu by remember { mutableStateOf(false) }
-    Card(Modifier.fillMaxWidth().testTag("saved-place-${place.id}"), shape = RoundedCornerShape(16.dp)) {
+    GlassSurface(Modifier.fillMaxWidth().testTag("saved-place-${place.id}"), kind = GlassKind.Card, shape = RoundedCornerShape(20.dp)) {
         Column(Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.Top) {
-                Box(Modifier.size(72.dp).clickable(onClick = open).testTag("place-image-${place.id}").semantics(mergeDescendants = true) {
+                Box(Modifier.size(76.dp).clickable(onClick = open).testTag("place-image-${place.id}").semantics(mergeDescendants = true) {
                     contentDescription = if (place.googlePlaceId != null) "View ${place.name} on map" else "Find ${place.name} on map"
                 }) {
                     PlaceImage(place.photoUri, photo, place.name, Modifier.fillMaxSize(), place.category)
@@ -81,7 +84,22 @@ internal fun SavedPlaceCard(place: Place, tripLabel: String?, maps: MapViewModel
                     }
                 }
             }
-            if (place.photoUri.isBlank()) PhotoCredits(photo)
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                val stacked = maxWidth < 340.dp || androidx.compose.ui.platform.LocalDensity.current.fontScale > 1.3f
+                val mapAction: @Composable () -> Unit = {
+                    TextButton(onClick = open, modifier = Modifier.heightIn(min = 48.dp)) {
+                        Icon(Icons.Default.Map, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp))
+                        Text(if (place.googlePlaceId != null) "View on map" else "Find on map")
+                    }
+                }
+                if (stacked) Column(Modifier.fillMaxWidth()) {
+                    if (place.photoUri.isBlank()) PhotoCredits(photo)
+                    Box(Modifier.align(Alignment.End)) { mapAction() }
+                } else Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.weight(1f)) { if (place.photoUri.isBlank()) PhotoCredits(photo) }
+                    mapAction()
+                }
+            }
         }
     }
 }

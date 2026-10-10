@@ -110,8 +110,10 @@ class MapLayoutDeviceTest {
         val searchRoot = compose.onNodeWithTag("map-layout").fetchSemanticsNode().boundsInRoot
         val controls = compose.onNodeWithTag("map-controls").fetchSemanticsNode().boundsInRoot
         val searchMap = compose.onNodeWithTag("map-viewport").fetchSemanticsNode().boundsInRoot
-        assertEquals(searchRoot.height - controls.height - 12f, searchMap.height, 1f)
-        assertEquals(controls.bottom, searchMap.top, 1f)
+        assertEquals(searchRoot.height, searchMap.height, 1f)
+        assertEquals(searchRoot.top, searchMap.top, 1f)
+        val safeBeforeSelection = compose.onNodeWithTag("map-safe-content").fetchSemanticsNode().boundsInRoot
+        assertTrue("Map focus and SDK controls must sit below the floating search", safeBeforeSelection.top >= controls.bottom)
         val frame = compose.onNodeWithTag("map-frame").fetchSemanticsNode().boundsInRoot
         val searchField = compose.onNodeWithTag("map-search").fetchSemanticsNode().boundsInRoot
         assertEquals(searchField.left, frame.left, 1f)
@@ -141,7 +143,7 @@ class MapLayoutDeviceTest {
         assertTrue("Visible map should occupy most of the selected-place screen", safeMap.height > root.height * 0.5f)
         assertEquals(safeMap.bottom + 8f, surround.top, 1f)
         assertEquals(card.left - surround.left, card.top - surround.top, 1f)
-        assertEquals(12f, root.bottom - map.bottom, 1f)
+        assertEquals(root.bottom, map.bottom, 1f)
         assertTrue(compose.onNodeWithTag("map-save").fetchSemanticsNode().boundsInRoot.bottom <=
             compose.onNodeWithTag("place-detail-name").fetchSemanticsNode().boundsInRoot.top)
         assertTrue(saved.isEmpty())
@@ -152,13 +154,13 @@ class MapLayoutDeviceTest {
 
     @Test fun expandingTheMapKeepsThePlaceAndSaveAndBackRestoresSearch() {
         selectPlace()
-        val initialHeight = compose.onNodeWithTag("map-viewport").fetchSemanticsNode().boundsInRoot.height
+        val initialHeight = compose.onNodeWithTag("map-safe-content").fetchSemanticsNode().boundsInRoot.height
         compose.onNodeWithContentDescription("Expand map").performClick()
         compose.onNodeWithTag("map-search").assertDoesNotExist()
         compose.onNodeWithTag("map-save").assertIsDisplayed()
         compose.onNodeWithContentDescription("Change test theme").performClick()
         assertEquals(1, themeChanges)
-        assertTrue(compose.onNodeWithTag("map-viewport").fetchSemanticsNode().boundsInRoot.height > initialHeight)
+        assertTrue(compose.onNodeWithTag("map-safe-content").fetchSemanticsNode().boundsInRoot.height > initialHeight)
         device.pressBack()
         compose.onNodeWithTag("map-search").assertIsDisplayed()
         compose.onNodeWithTag("map-save").assertIsDisplayed()
@@ -271,6 +273,9 @@ class MapLayoutDeviceTest {
         compose.onNodeWithTag("map-save").assertIsDisplayed()
         assertTrue("Save should retain a 48 dp target with large text in a short window",
             compose.onNodeWithTag("map-save").fetchSemanticsNode().boundsInRoot.height >= 48f)
+        val safe = compose.onNodeWithTag("map-safe-content").fetchSemanticsNode().boundsInRoot
+        val summary = compose.onNodeWithTag("map-card-surround").fetchSemanticsNode().boundsInRoot
+        assertTrue("SDK attribution must stay above the short-window card with large text", safe.bottom + 8f <= summary.top + 1f)
         compose.runOnIdle { fontScale = 1f }
         compose.onNodeWithContentDescription("Map options").performClick()
         compose.onNodeWithText("Expand map").performClick()

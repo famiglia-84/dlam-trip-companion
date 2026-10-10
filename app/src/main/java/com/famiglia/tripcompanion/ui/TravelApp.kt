@@ -2,6 +2,7 @@ package com.famiglia.tripcompanion.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -28,6 +29,8 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -109,27 +112,37 @@ fun TravelApp(model: TravelViewModel) {
                     }
                 },
                 bottomBar = {
-                    if (!expanded) NavigationBar {
-                        NavigationBarItem(selected = route == "trips", onClick = { navigator.navigate("trips") { launchSingleTop = true; popUpTo("trips"); restoreState = true } },
-                            icon = { Icon(Icons.Default.Luggage, null) }, label = { Text("My trips") })
-                        NavigationBarItem(selected = route == "places", onClick = { navigator.navigate("places") { launchSingleTop = true } },
-                            icon = { Icon(Icons.Default.Bookmarks, null) }, label = { Text("Saved places") })
-                        NavigationBarItem(selected = route == "maps", onClick = { navigator.navigate("maps") { launchSingleTop = true } },
-                            icon = { Icon(Icons.Default.Map, null) }, label = { Text("Map") })
+                    if (!expanded) Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 12.dp, vertical = 8.dp)) {
+                        GlassSurface(Modifier.fillMaxWidth().testTag("glass-navigation"), shape = RoundedCornerShape(28.dp)) {
+                            NavigationBar(containerColor = Color.Transparent, tonalElevation = 0.dp, windowInsets = WindowInsets(0, 0, 0, 0)) {
+                                NavigationBarItem(selected = route == "trips", onClick = { navigator.navigate("trips") { launchSingleTop = true; popUpTo("trips"); restoreState = true } },
+                                    icon = { Icon(Icons.Default.Luggage, null) }, label = { Text("My trips") })
+                                NavigationBarItem(selected = route == "places", onClick = { navigator.navigate("places") { launchSingleTop = true } },
+                                    icon = { Icon(Icons.Default.Bookmarks, null) }, label = { Text("Saved places") })
+                                NavigationBarItem(selected = route == "maps", onClick = { navigator.navigate("maps") { launchSingleTop = true } },
+                                    icon = { Icon(Icons.Default.Map, null) }, label = { Text("Map") })
+                            }
+                        }
                     }
                 },
                 snackbarHost = { SnackbarHost(snacks) },
             ) { padding ->
-                Row(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)) {
-                    if (expanded) NavigationRail {
-                        Spacer(Modifier.height(20.dp))
-                        NavigationRailItem(selected = route == "trips", onClick = { navigator.navigate("trips") { launchSingleTop = true; popUpTo("trips") } },
-                            icon = { Icon(Icons.Default.Luggage, null) }, label = { Text("My trips") })
-                        Spacer(Modifier.height(12.dp))
-                        NavigationRailItem(selected = route == "places", onClick = { navigator.navigate("places") { launchSingleTop = true } },
-                            icon = { Icon(Icons.Default.Bookmarks, null) }, label = { Text("Places") })
-                        NavigationRailItem(selected = route == "maps", onClick = { navigator.navigate("maps") { launchSingleTop = true } },
-                            icon = { Icon(Icons.Default.Map, null) }, label = { Text("Map") })
+                val mapBehindDock = route == "maps" && maps.configured && !expanded
+                val direction = LocalLayoutDirection.current
+                val contentPadding = PaddingValues(start = padding.calculateStartPadding(direction), top = padding.calculateTopPadding(),
+                    end = padding.calculateEndPadding(direction), bottom = if (mapBehindDock) 0.dp else padding.calculateBottomPadding())
+                Row(Modifier.fillMaxSize().padding(contentPadding).consumeWindowInsets(padding)) {
+                    if (expanded) GlassSurface(Modifier.padding(8.dp).testTag("glass-navigation-rail")) {
+                        NavigationRail(containerColor = Color.Transparent) {
+                            Spacer(Modifier.height(20.dp))
+                            NavigationRailItem(selected = route == "trips", onClick = { navigator.navigate("trips") { launchSingleTop = true; popUpTo("trips") } },
+                                icon = { Icon(Icons.Default.Luggage, null) }, label = { Text("My trips") })
+                            Spacer(Modifier.height(12.dp))
+                            NavigationRailItem(selected = route == "places", onClick = { navigator.navigate("places") { launchSingleTop = true } },
+                                icon = { Icon(Icons.Default.Bookmarks, null) }, label = { Text("Places") })
+                            NavigationRailItem(selected = route == "maps", onClick = { navigator.navigate("maps") { launchSingleTop = true } },
+                                icon = { Icon(Icons.Default.Map, null) }, label = { Text("Map") })
+                        }
                     }
                     NavHost(navigator, startDestination = "trips", modifier = Modifier.weight(1f)) {
                         composable("trips") {
@@ -155,7 +168,7 @@ fun TravelApp(model: TravelViewModel) {
                             MapPane(maps, data.places, null, ::saveMapPlace, requestedPlaceId = requestedMapPlace,
                                 consumedRequest = { requestedMapPlace = null }, appearance = {
                                     IconButton(onClick = model::cycleTheme) { Icon(Icons.Default.Contrast, "Theme: $theme. Change appearance") }
-                                })
+                                }, bottomOverlay = if (mapBehindDock) padding.calculateBottomPadding() else 0.dp)
                         }
                     }
                 }
@@ -231,12 +244,14 @@ fun TripsPane(trips: List<Trip>, selected: Long?, select: (Long) -> Unit, add: (
 
 @Composable
 private fun TripCard(trip: Trip, selected: Boolean, click: () -> Unit) {
-    Card(onClick = click, shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer)) {
-        DestinationPhoto(trip, Modifier.fillMaxWidth().height(170.dp))
-        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(trip.destination, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
-            Text("${readableDate(trip.startDate)} – ${readableDate(trip.endDate)}", style = MaterialTheme.typography.bodyMedium)
-            Text(trip.countdown(), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
+    GlassSurface(Modifier.clickable(role = Role.Button, onClick = click), kind = GlassKind.Card, focused = selected) {
+        Column {
+            DestinationPhoto(trip, Modifier.fillMaxWidth().height(170.dp))
+            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(trip.destination, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
+                Text("${readableDate(trip.startDate)} – ${readableDate(trip.endDate)}", style = MaterialTheme.typography.bodyMedium)
+                Text(trip.countdown(), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
+            }
         }
     }
 }
@@ -305,7 +320,7 @@ private fun TripDetails(trip: Trip, data: TravelData, section: String, sectionCh
                     if (days.isEmpty()) item { InlineEmpty("A day at a time.", "Create a plan, then add activities or your saved places. Everything is kept offline.") }
                     items(days, key = { "day-${it.id}" }) { plan ->
                         val activities = data.activities.filter { it.planId == plan.id }
-                        Card(shape = RoundedCornerShape(20.dp)) {
+                        GlassSurface(kind = GlassKind.Card, shape = RoundedCornerShape(20.dp)) {
                             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Column(Modifier.weight(1f)) {
@@ -350,7 +365,7 @@ private fun TripDetails(trip: Trip, data: TravelData, section: String, sectionCh
 
 @Composable
 private fun InfoCard(title: String, subtitle: String, icon: ImageVector, edit: () -> Unit, remove: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
-    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
+    GlassSurface(Modifier.fillMaxWidth(), kind = GlassKind.Card, shape = RoundedCornerShape(20.dp)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(icon, null, tint = MaterialTheme.colorScheme.primary)

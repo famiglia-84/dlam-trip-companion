@@ -34,8 +34,9 @@ internal fun MapPlaceSheet(selected: MapLocation, saved: Place?, model: MapViewM
     height: Dp, compact: Boolean, expanded: Boolean, toggle: () -> Unit, save: () -> Unit,
     appearance: (@Composable () -> Unit)? = null) {
     val localPhoto = saved?.photoUri.orEmpty()
-    Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxWidth().testTag("map-card-surround")) {
-        Card(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 12.dp).height(height - 12.dp).testTag("map-place-card"), shape = RoundedCornerShape(20.dp)) {
+    Surface(color = Color.Transparent, modifier = Modifier.fillMaxWidth().testTag("map-card-surround")) {
+        GlassSurface(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 12.dp).height((height - 12.dp).coerceAtLeast(1.dp)).testTag("map-place-card"),
+            kind = GlassKind.Details, shape = RoundedCornerShape(24.dp)) {
             Column(Modifier.fillMaxSize()) {
                 Column(Modifier.fillMaxWidth().testTag("place-details-toolbar").padding(horizontal = 12.dp, vertical = 4.dp)) {
                     SheetHandle()
@@ -126,14 +127,14 @@ private fun SheetHandle() {
 
 @Composable
 private fun RowScope.PlaceSheetControls(expanded: Boolean, toggle: () -> Unit, close: () -> Unit) {
-    IconButton(onClick = toggle) { Icon(if (expanded) Icons.Default.ExpandMore else Icons.Default.ExpandLess,
+    FilledTonalIconButton(onClick = toggle, colors = IconButtonDefaults.filledTonalIconButtonColors(containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.75f))) { Icon(if (expanded) Icons.Default.ExpandMore else Icons.Default.ExpandLess,
         if (expanded) "Collapse place details" else "Expand place details") }
-    IconButton(onClick = close) { Icon(Icons.Default.Close, "Close place") }
+    FilledTonalIconButton(onClick = close, colors = IconButtonDefaults.filledTonalIconButtonColors(containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.75f))) { Icon(Icons.Default.Close, "Close place") }
 }
 
 @Composable
 private fun PlaceSaveButton(busy: Boolean, save: () -> Unit, label: String) {
-    Button(onClick = save, enabled = !busy, shape = RoundedCornerShape(12.dp), modifier = Modifier.heightIn(min = 48.dp).testTag("map-save")) {
+    Button(onClick = save, enabled = !busy, shape = RoundedCornerShape(20.dp), modifier = Modifier.heightIn(min = 48.dp).testTag("map-save")) {
         Icon(Icons.Default.BookmarkBorder, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(label)
     }
 }
@@ -146,13 +147,13 @@ private fun PlaceActions(place: MapLocation, details: PlaceDetails?) {
         catch (_: ActivityNotFoundException) { Toast.makeText(context, "No app is available for this action.", Toast.LENGTH_SHORT).show() }
     }
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        FilledTonalButton(onClick = { open(Intent(Intent.ACTION_VIEW, PlaceLinks.directions(place))) }) { Text("Directions") }
-        OutlinedButton(onClick = {
+        GlassAction("Directions", Icons.Default.Directions) { open(Intent(Intent.ACTION_VIEW, PlaceLinks.directions(place))) }
+        GlassAction("Share", Icons.Default.Share) {
             open(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, PlaceLinks.view(place).toString()), "Share place"))
-        }) { Text("Share") }
-        details?.phone?.takeIf(String::isNotBlank)?.let { phone ->
-            OutlinedButton(onClick = { open(Intent(Intent.ACTION_DIAL, Uri.fromParts("tel", phone, null))) }) { Text("Call") }
         }
-        PlaceLinks.website(details?.website)?.let { uri -> OutlinedButton(onClick = { open(Intent(Intent.ACTION_VIEW, uri)) }) { Text("Website") } }
+        details?.phone?.takeIf(String::isNotBlank)?.let { phone ->
+            GlassAction("Call", Icons.Default.Call) { open(Intent(Intent.ACTION_DIAL, Uri.fromParts("tel", phone, null))) }
+        }
+        PlaceLinks.website(details?.website)?.let { uri -> GlassAction("Website", Icons.Default.Language) { open(Intent(Intent.ACTION_VIEW, uri)) } }
     }
 }

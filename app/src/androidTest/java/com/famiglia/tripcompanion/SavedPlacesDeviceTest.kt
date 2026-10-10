@@ -10,6 +10,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.test.*
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -40,6 +42,7 @@ class SavedPlacesDeviceTest {
     private var previousLookup: PlaceLookup? = null
     private var linkedId = 0L
     private var manualId = 0L
+    private var fontScale by mutableFloatStateOf(1f)
     private lateinit var ownPhoto: File
 
     @Before fun setUp() {
@@ -56,7 +59,8 @@ class SavedPlacesDeviceTest {
             manualId = app.repository.save(Place(name = "Manual café", address = "Sampletown", photoUri = Uri.fromFile(ownPhoto).toString()))
         }
         compose.setContent {
-            CompositionLocalProvider(LocalMapRenderer provides { modifier, padding ->
+            val density = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale), LocalMapRenderer provides { modifier, padding ->
                 Surface(modifier) { Box(Modifier.fillMaxSize().padding(padding).testTag("controlled-map")) { Text("Controlled map") } }
             }) {
                 val model: TravelViewModel = viewModel()
@@ -89,6 +93,13 @@ class SavedPlacesDeviceTest {
         compose.waitUntil(15_000) { compose.onAllNodesWithText("Saved as Luz Café").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("Saved as Luz Café").assertIsDisplayed()
         compose.onNodeWithText("Trip Companion").assertDoesNotExist()
+        val dock = compose.onNodeWithTag("glass-navigation").fetchSemanticsNode().boundsInRoot
+        val mapFrame = compose.onNodeWithTag("map-frame").fetchSemanticsNode().boundsInRoot
+        val safeMap = compose.onNodeWithTag("controlled-map").fetchSemanticsNode().boundsInRoot
+        val card = compose.onNodeWithTag("map-place-card").fetchSemanticsNode().boundsInRoot
+        assertTrue("Map must continue behind the floating navigation", mapFrame.bottom > dock.top)
+        assertTrue("SDK controls must remain above navigation and the place card", safeMap.bottom < card.top)
+        assertTrue("The card must not cover navigation", card.bottom <= dock.top)
         val toolbar = compose.onNodeWithTag("map-toolbar").fetchSemanticsNode().boundsInRoot
         assertTrue(toolbar.bottom <= compose.onNodeWithTag("map-search").fetchSemanticsNode().boundsInRoot.top)
         val themeAction = hasContentDescription("Change appearance", substring = true)
@@ -111,6 +122,24 @@ class SavedPlacesDeviceTest {
         assertTrue(lookup.selected.isEmpty())
         assertTrue(lookup.searches.isEmpty())
         assertEquals(listOf("luz-id"), lookup.photos.distinct())
+    }
+
+    @Test fun mapActionAndGlassNavigationStayUsableAcrossThemeChangesAndLargerText() {
+        compose.runOnIdle { fontScale = 1.5f }
+        compose.onNode(hasText("View on map") and hasClickAction()).performClick()
+        compose.waitUntil(15_000) { compose.onAllNodesWithText("Saved as Luz Café").fetchSemanticsNodes().isNotEmpty() }
+        val themeAction = hasContentDescription("Change appearance", substring = true)
+        repeat(2) {
+            val before = compose.onNode(themeAction).fetchSemanticsNode().config[SemanticsProperties.ContentDescription]
+            compose.onNode(themeAction).performClick()
+            compose.waitUntil(10_000) { compose.onNode(themeAction).fetchSemanticsNode().config[SemanticsProperties.ContentDescription] != before }
+            compose.onNodeWithTag("map-search").assertIsDisplayed()
+            compose.onNodeWithContentDescription("Close place").assertIsDisplayed()
+            compose.onNodeWithTag("glass-navigation").assertIsDisplayed()
+        }
+        compose.onNode(hasText("Saved places") and hasClickAction()).performClick()
+        compose.onNode(hasText("View on map") and hasClickAction()).assertIsDisplayed()
+        assertEquals(listOf("luz-id"), lookup.selected)
     }
 
     private class FakePlaces : PlaceLookup {
