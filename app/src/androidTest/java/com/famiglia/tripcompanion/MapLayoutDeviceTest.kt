@@ -141,6 +141,10 @@ class MapLayoutDeviceTest {
         searchForBari()
         compose.onNodeWithText("Luz restaurant").performClick()
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("map-save").fetchSemanticsNodes().isNotEmpty() }
+        awaitStableMapWindow()
+    }
+
+    private fun awaitStableMapWindow() {
         // Compose idle does not await the platform IME/window-insets animation. Start physical
         // gesture measurements only once the window has stopped resizing after keyboard dismissal.
         var previous = compose.onNodeWithTag("map-layout").fetchSemanticsNode().boundsInRoot
@@ -216,6 +220,7 @@ class MapLayoutDeviceTest {
         compose.onNodeWithTag("map-results").assertDoesNotExist()
         compose.onNodeWithTag("map-save").assertIsDisplayed()
         compose.onNodeWithTag("map-search").assertIsNotFocused()
+        awaitStableMapWindow()
         val search = compose.onNodeWithTag("map-search").fetchSemanticsNode().boundsInRoot
         assertEquals(56f, search.height, 1f) // Fixture uses 160 dpi and the standard text scale.
         compose.waitUntil(10_000) {
@@ -228,7 +233,7 @@ class MapLayoutDeviceTest {
         val surround = compose.onNodeWithTag("map-card-surround").fetchSemanticsNode().boundsInRoot
         val card = compose.onNodeWithTag("map-place-card").fetchSemanticsNode().boundsInRoot
         val safeMap = compose.onNodeWithTag("map-safe-content").fetchSemanticsNode().boundsInRoot
-        assertTrue("The larger photo summary must leave a useful map area", safeMap.height > root.height * 0.4f)
+        assertTrue("The larger photo summary must leave a useful map area: root=$root, safe=$safeMap", safeMap.height > root.height * 0.4f)
         assertEquals(safeMap.bottom + 8f, surround.top, 1f)
         assertEquals(card.left - surround.left, card.top - surround.top, 1f)
         assertEquals(root.bottom, map.bottom, 1f)
